@@ -1,18 +1,15 @@
+'''
+对已经fetch的所有crash，进行汇总。
+初步的汇总比较简单，将stack生成指纹（fingerprint），根据指纹汇总。
+'''
 
 from enum import Enum
 from pathlib import Path
-import sys
 import os
 import argparse
 import re
 
 from . import setup
-from . import config
-
-'''
-对已经fetch的所有crash，进行汇总。
-初步的汇总比较简单，将stack生成指纹（fingerprint），根据指纹汇总。
-'''
 
 class ParseState(Enum):
     Init = 0,
@@ -22,36 +19,40 @@ class ParseState(Enum):
     CrashStackFinish = 4,
     BinaryImage = 5,
 
+
 class CrashParser:
     def __init__(self, is_rough) -> None:
         self._is_rough = is_rough
 
     @staticmethod
-    def _parse_header(dict:dict, text:str):
+    def _parse_header(headers: dict, text: str):
         '''提取键值对'''
-        if text == '': return
+        if text == '':
+            return
         arr = text.split(':')
-        dict[arr[0]] = arr[1].strip()
+        headers[arr[0]] = arr[1].strip()
 
     @staticmethod
-    def stack_fingerprint(stacks:list, is_rough)->str:
+    def stack_fingerprint(stacks: list, is_rough) -> str:
         '''从stack计算一个指纹'''
 
-        list = []
+        stack_list = []
         if not is_rough:
             for stack in stacks:
-                match = re.match('[0-9]+ +([^ ]+) +0x[0-9a-f]+ 0x[0-9a-f]+ \\+ ([0-9]+)', stack)
+                match = re.match(
+                    '[0-9]+ +([^ ]+) +0x[0-9a-f]+ 0x[0-9a-f]+ \\+ ([0-9]+)', stack)
                 if match:
-                    list.append('%s:%s' % (match.groups()[0], match.groups()[1]))
+                    stack_list.append('%s:%s' %
+                                      (match.groups()[0], match.groups()[1]))
         else:
             for stack in stacks:
                 match = re.match('[0-9]+ +([^ ]+)', stack)
                 if match:
-                    list.append(match.groups()[0])
-        return '\n'.join(list)
+                    stack_list.append(match.groups()[0])
+        return '\n'.join(stack_list)
 
     @staticmethod
-    def parse_stack_frameworks(stacks:list)->dict:
+    def parse_stack_frameworks(stacks: list) -> dict:
         '''解析stack中的framework'''
         frameworks = {}
         for stack in stacks:
@@ -62,7 +63,7 @@ class CrashParser:
 
         return frameworks
 
-    def parse_crash(self, text:str)->dict:
+    def parse_crash(self, text: str) -> dict:
         '''从文本解析crash信息，保存结果为字典'''
         lines = text.split('\n')
         stacks = []
@@ -92,11 +93,13 @@ class CrashParser:
             elif state == ParseState.CrashStackFinish:
                 if line.startswith('Binary Images:'):
                     state = ParseState.BinaryImage
-                    stack_frameworks = CrashParser.parse_stack_frameworks(stacks)
+                    stack_frameworks = CrashParser.parse_stack_frameworks(
+                        stacks)
 
             elif state == ParseState.BinaryImage:
                 # 0x102b14000 -        0x102b1ffff  libobjc-trampolines.dylib arm64e  <c4eb3fea90983e00a8b00b468bd6701d> /usr/lib/libobjc-trampolines.dylib
-                match = re.match('.*(0x[0-9a-f]+) - +(0x[0-9a-f]+) +([^ ]+) +([^ ]+) +<([^>]+)>', line)
+                match = re.match(
+                    '.*(0x[0-9a-f]+) - +(0x[0-9a-f]+) +([^ ]+) +([^ ]+) +<([^>]+)>', line)
                 if match:
                     framework_name = match.groups()[2]
                     if framework_name in stack_frameworks:
@@ -107,28 +110,32 @@ class CrashParser:
 
         crash['stacks'] = stacks
         crash['is_arm64e'] = text.find('CoreFoundation arm64e') >= 0
-        crash['stack_key'] = CrashParser.stack_fingerprint(stacks, self._is_rough)
+        crash['stack_key'] = CrashParser.stack_fingerprint(
+            stacks, self._is_rough)
         return crash
 
-def read_crash(filename:str, is_rough)->dict:
+
+def read_crash(filename: str, is_rough) -> dict:
     '''从文件中提取crash'''
-    with open(filename, 'r') as file:
+    with open(filename, 'r', encoding='utf8') as file:
         text = file.read()
         parser = CrashParser(is_rough)
         crash = parser.parse_crash(text)
         return crash
 
-def read_crash_list(crash_dir:str, is_rough)->list:
+
+def read_crash_list(crash_dir: str, is_rough) -> list:
     '''从目录中提取crash的列表'''
     crashes = []
-    for root,_,filenames in os.walk(crash_dir):
+    for root, _, filenames in os.walk(crash_dir):
         for filename in filenames:
             crash = read_crash(Path(root)/filename, is_rough)
             crash['filename'] = filename
             crashes.append(crash)
     return crashes
 
-def classify_by_stack(crash_list:list)->dict:
+
+def classify_by_stack(crash_list: list) -> dict:
     crashes = {}
     for crash in crash_list:
         fingerprint = crash['stack_key']
@@ -139,11 +146,13 @@ def classify_by_stack(crash_list:list)->dict:
 
     return crashes
 
+
 def stringify_crash(crash):
     return str(crash)
 
-def dump(crash_list, filename:str):
-    with open(filename, 'w') as file:
+
+def dump(crash_list, filename: str):
+    with open(filename, 'w', encoding='utf8') as file:
         for crashes_pair in crash_list:
             file.write(f'\n------ {crashes_pair[1]} in total ------\n')
 
@@ -151,17 +160,20 @@ def dump(crash_list, filename:str):
                 file.write(str(crash))
                 file.write("\n")
 
-def is_os_available(crash:dict, os_names:set)->bool:
+
+def is_os_available(crash: dict, os_names: set) -> bool:
     '''os的符号是否可用'''
     arm64e = 'arm64e' if crash['is_arm64e'] else 'arm64'
     return (crash['OS Version'] + ' ' + arm64e) in os_names
 
-def read_os_names(filename)->set:
+
+def read_os_names(filename) -> set:
     '''读取已经下载就绪的os名字，比如 iPhone OS 13.6 (17G68) arm64e'''
     lines = []
-    with open(filename, 'r') as file:
+    with open(filename, 'r', encoding='utf8') as file:
         lines = file.read().split('\n')
     return set(line for line in lines if line.strip() != '')
+
 
 def _do_classify(args):
     '''统计stack指纹'''
@@ -175,9 +187,10 @@ def _do_classify(args):
 
     crashes = classify_by_stack(crash_list)
 
-    crashes_sort =  list(crashes.items())
+    crashes_sort = list(crashes.items())
     crashes_sort.sort(key=lambda x: len(x[1]), reverse=True)
     dump(crashes_sort, args.out_file)
+
 
 def _do_stat_os(args):
     '''统计os'''
@@ -192,24 +205,29 @@ def _do_stat_os(args):
 
     sort_list = list(crash_dict.items())
     sort_list.sort(key=lambda x: x[1], reverse=True)
-    with open(args.out_file, 'w') as file:
+    with open(args.out_file, 'w', encoding='utf8') as file:
         for os_version, count in sort_list:
             file.write(f'{count}\t{os_version}\n')
 
+
 def _do_parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--setting_file', help='a ini setting file', default='setting.ini')
-    
+    parser.add_argument(
+        '--setting_file', help='a ini setting file', default='setting.ini')
+
     sub_parsers = parser.add_subparsers()
 
-    sub_parser = sub_parsers.add_parser('classify', help='classify crashes by stack fingerprint')
-    sub_parser.add_argument('--is_rough', help='is rough stack fingerprint', action='store_true', dest='is_rough')
+    sub_parser = sub_parsers.add_parser(
+        'classify', help='classify crashes by stack fingerprint')
+    sub_parser.add_argument(
+        '--is_rough', help='is rough stack fingerprint', action='store_true', dest='is_rough')
     sub_parser.add_argument('--os_file', help='downloaded os names')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_classify)
 
-    sub_parser = sub_parsers.add_parser('stat_os', help='statistics crashed iOS platforms')
+    sub_parser = sub_parsers.add_parser(
+        'stat_os', help='statistics crashed iOS platforms')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_stat_os)
@@ -217,6 +235,7 @@ def _do_parse_args():
     args = parser.parse_args()
     setup.setup(args.setting_file)
     args.func(args)
+
 
 if __name__ == '__main__':
     _do_parse_args()

@@ -1,6 +1,6 @@
-
 '''
-CrashResolver tries to manage (fetch, symbolicate, gather statistics) multiple crash reports, crash reports may be from different platforms, such as iOS, Android, Mac OS X, etc.
+CrashResolver tries to manage (fetch, symbolicate, gather statistics) multiple crash reports.
+Crash reports may be from different platforms, such as iOS, Android, Mac OS X, etc.
 
 This tool need a setting file to configure it, the format as following:
 

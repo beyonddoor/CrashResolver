@@ -1,3 +1,5 @@
+'''config for package'''
+
 import configparser
 
 LogConfigFile = 'log.yaml'
@@ -15,11 +17,13 @@ SymbolicatePath = './symbolicate.sh'
 CrashRepoUrl = ''
 '''crash文件的仓库地址'''
 
+
 def parse_config(filename):
+    '''parse config'''
     global CrashExt, SymbolExt, SymbolicatePath, CrashRepoUrl, LogConfigFile
 
     try:
-        with open(filename, 'r') as file:
+        with open(filename, 'r', encoding='utf8') as file:
             config = configparser.ConfigParser()
             config.read_file(file)
             section = config['global']
@@ -28,12 +32,14 @@ def parse_config(filename):
             SymbolicatePath = section.get('SymbolicatePath', '.sym')
             CrashRepoUrl = section.get('CrashRepoUrl', '.sym')
             LogConfigFile = section.get('LogConfigFile', 'log.yaml')
-            
+
     except Exception as e:
         print(f'parse config "{filename}" error: {e}')
 
+
 def write_config(filename):
-    with open(filename, 'w') as file:
+    '''write config'''
+    with open(filename, 'w', encoding='utf8') as file:
         config = configparser.ConfigParser()
         config['CrashExt'] = CrashExt
         config['SymbolExt'] = SymbolExt
