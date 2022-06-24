@@ -16,18 +16,21 @@ CrashRepoUrl = ''
 '''crash文件的仓库地址'''
 
 def parse_config(filename):
-    global CrashExt, SymbolExt, SymbolicatePath, CrashRepoUrl
+    global CrashExt, SymbolExt, SymbolicatePath, CrashRepoUrl, LogConfigFile
 
     try:
         with open(filename, 'r') as file:
             config = configparser.ConfigParser()
             config.read_file(file)
-            CrashExt = config.get('CrashExt', '.txt')
-            SymbolExt = config.get('CrashExt', '.sym')
-            SymbolicatePath = config.get('SymbolicatePath', '.sym')
-            CrashRepoUrl = config.get('CrashRepoUrl', '.sym')
+            section = config['global']
+            CrashExt = section.get('CrashExt', '.txt')
+            SymbolExt = section.get('CrashExt', '.sym')
+            SymbolicatePath = section.get('SymbolicatePath', '.sym')
+            CrashRepoUrl = section.get('CrashRepoUrl', '.sym')
+            LogConfigFile = section.get('LogConfigFile', 'log.yaml')
+            
     except Exception as e:
-        print(f'parse config {filename} error: {e}')
+        print(f'parse config "{filename}" error: {e}')
 
 def write_config(filename):
     with open(filename, 'w') as file:

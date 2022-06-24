@@ -2,11 +2,12 @@ import os
 import argparse
 from pathlib import Path
 
-import config
-import classifier
 import logging
 import subprocess
-import setup
+
+from . import config
+from . import classifier
+from . import setup
 
 logger = logging.getLogger(__name__)
 
@@ -115,12 +116,12 @@ def _do_report(args):
     report = CrashReport(symbolicate, lambda crash: parse_reason(crash, reasons))
     report.generate_report(crash_dir, output_file)
 
-if __name__ == '__main__':
-    setup.setup()
-    
+def _do_parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--setting_file', help='setting file', default='setting.ini')
+    
     sub_parsers = parser.add_subparsers()
-
+    
     sub_parser = sub_parsers.add_parser('report')
     sub_parser.add_argument('crash_dir', help='clash report dir')
     sub_parser.add_argument('reason_file', help='reason file')
@@ -128,4 +129,8 @@ if __name__ == '__main__':
     sub_parser.set_defaults(func=_do_report)
 
     args = parser.parse_args()
+    setup.setup(args.setting_file)
     args.func(args)
+
+if __name__ == '__main__':   
+    _do_parse_args()

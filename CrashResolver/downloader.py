@@ -1,10 +1,11 @@
 
-from charset_normalizer import logging
+import logging
 import requests
 import pathlib
 import argparse
-import config
-import setup
+
+from . import config
+from . import setup
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +45,10 @@ class CrashDownloader:
             start_pos = crash_url.rfind('/', 0, end_pos)
             filename = crash_url[start_pos+1:end_pos]
             path = save_dir / (filename + config.CrashExt)
-            logger.debug('write file ', filename)
+            logger.info('download file ', crash_url, filename)
 
             if path.exists():
+                logger.info('file exists, skip ', filename)
                 continue
 
             with open(path, 'wb') as file:
@@ -59,18 +61,26 @@ class CrashDownloader:
 
 def do_fetch(args):
     downloader = CrashDownloader(args.save_dir, args.start_time, args.end_time, args.page_size)
-    downloader.download_all()
+    if args.page >= 0:
+        downloader.download(args.page)
+    else:
+        downloader.download_all()
 
-
-if __name__ == '__main__':
-    setup.setup()
-    
+def _do_parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('save_dir', help='save dir')
+    parser.add_argument('--setting_file', help='setting file', default='setting.ini')
+    
+    parser.add_argument('save_dir', help='save directory for crash files')
     parser.add_argument('--start_time', help='start time', default='2022-06-20')
     parser.add_argument('--end_time', help='end time', default='2022-06-21')
-    parser.add_argument('--page', help='page no', default=1)
-    parser.add_argument('--page_size', help='page size', default=100)
+    parser.add_argument('--page', help='page number, if -1 then all pages will be downloaded', default=1, type=int)
+    parser.add_argument('--page_size', help='page size', default=100, type=int)
     parser.set_defaults(func=do_fetch)
+    
     args = parser.parse_args()
+    setup.setup(args.setting_file)
+    logger.info('test')
     args.func(args)
+
+if __name__ == '__main__':
+    _do_parse_args()

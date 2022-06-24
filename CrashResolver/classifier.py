@@ -5,8 +5,9 @@ import sys
 import os
 import argparse
 import re
-import setup
-import config
+
+from . import setup
+from . import config
 
 '''
 对已经fetch的所有crash，进行汇总。
@@ -195,24 +196,27 @@ def _do_stat_os(args):
         for os_version, count in sort_list:
             file.write(f'{count}\t{os_version}\n')
 
-
-if __name__ == '__main__':
-    setup.setup()
-    
+def _do_parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--setting_file', help='a ini setting file', default='setting.ini')
+    
     sub_parsers = parser.add_subparsers()
 
-    sub_parser = sub_parsers.add_parser('classify')
+    sub_parser = sub_parsers.add_parser('classify', help='classify crashes by stack fingerprint')
     sub_parser.add_argument('--is_rough', help='is rough stack fingerprint', action='store_true', dest='is_rough')
     sub_parser.add_argument('--os_file', help='downloaded os names')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_classify)
 
-    sub_parser = sub_parsers.add_parser('stat_os')
+    sub_parser = sub_parsers.add_parser('stat_os', help='statistics crashed iOS platforms')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_stat_os)
 
     args = parser.parse_args()
+    setup.setup(args.setting_file)
     args.func(args)
+
+if __name__ == '__main__':
+    _do_parse_args()
