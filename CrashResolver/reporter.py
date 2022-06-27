@@ -6,13 +6,15 @@ from pathlib import Path
 
 import logging
 
+from .symbolicator import Symbolicator
+
 from . import config
 from . import crash_parser
 
 logger = logging.getLogger(__name__)
 
 
-def find_symbolated_crashes(crash_dir: str) -> list[str]:
+def find_symbolated_crashes(crash_dir: str) -> list:
     '''查找已经符号化的crashes，返回文件名，不包含后缀'''
     for _, _, filenames in os.walk(crash_dir):
         results = []
@@ -27,7 +29,7 @@ class CrashReport:
     统计所有的crash，自动输出报告
     '''
 
-    def __init__(self, symbol_obj) -> None:
+    def __init__(self, symbol_obj:Symbolicator) -> None:
         self._symbolicator = symbol_obj
 
     def _save_reason_stats(self, file, reasons_stat):
@@ -40,21 +42,7 @@ class CrashReport:
 
             file.write(f"{count}\t{pair[0]}\n")
 
-    def _save_tuple_list(self, file, tuper_list, crash_dir: Path, symbolicate_crashes):
-        reasons_stat = {}
-
-        for pair in tuper_list:
-            self._symbolicator.symbolicate_same_crashes(
-                pair[1], crash_dir, symbolicate_crashes)
-
-            reason = pair[1][0]['crash_reason']
-            if reason is None:
-                reason = 'unknown'
-
-            crash_list = [] if reason not in reasons_stat else reasons_stat[reason]
-            crash_list.append(pair[1])
-            reasons_stat[reason] = crash_list
-
+    def _save_tuple_list(self, file, tuper_list):
         for pair in tuper_list:
             crash = pair[1][0]
             reason = crash['crash_reason']
@@ -66,24 +54,39 @@ class CrashReport:
                 file.write(crash_parser.stringify_crash(crash))
                 file.write("\n")
 
+        reasons_stat = {}
+        for pair in tuper_list:
+            reason = pair[1][0]['crash_reason']
+            if reason is None:
+                reason = 'unknown'
+
+            crash_list = [] if reason not in reasons_stat else reasons_stat[reason]
+            crash_list.append(pair[1])
+            reasons_stat[reason] = crash_list
         self._save_reason_stats(file, reasons_stat)
+
+    def get_symbolicated_crashes(self, crash_dir: str):
+        symbolicated_crashes = set(find_symbolated_crashes(crash_dir))
+
+        crash_list = crash_parser.read_crash_list(crash_dir, False)
+        key_crashes_map = crash_parser.classify_by_stack(crash_list)
+        pairs_sorted = list(key_crashes_map.items())
+        pairs_sorted.sort(key=lambda x: len(x[1]), reverse=True)
+
+        for pair in pairs_sorted:
+            self._symbolicator.symbolicate_same_crashes(pair[1], crash_dir, symbolicated_crashes)
+
+        return pairs_sorted
 
     def generate_report(self, crash_dir: str, output_file: str) -> None:
         '''生成报告'''
         logger.info(
             'start generate report: {output_file}', output_file=output_file)
 
-        symbolicated_crashes = set(find_symbolated_crashes(crash_dir))
-
-        crash_list = crash_parser.read_crash_list(crash_dir, False)
-
-        key_crashes_map = crash_parser.classify_by_stack(crash_list)
-        pairs_sorted = list(key_crashes_map.items())
-        pairs_sorted.sort(key=lambda x: len(x[1]), reverse=True)
+        pairs_sorted = self.get_symbolicated_crashes(crash_dir)
 
         with open(output_file, 'w', encoding='utf8') as file:
-            self._save_tuple_list(file, pairs_sorted,
-                                  crash_dir, symbolicated_crashes)
+            self._save_tuple_list(file, pairs_sorted)
 
         logger.info(
             'finish generate report: {output_file}', output_file=output_file)

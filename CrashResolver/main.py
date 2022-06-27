@@ -42,8 +42,18 @@ def _do_stat_os(args):
 
 
 def _do_save_crashes_to_csv(args):
-    crashes = crash_parser.read_crash_list(args.crash_dir, False)
-    crash_parser.save_crashes_to_csv_file(crashes, args.out_file)
+    reasons = []
+    with open(args.reason_file, 'r', encoding='utf8') as file:
+        reasons = [line.strip()
+                   for line in file.read().split('\n') if line.strip() != '']
+    report = reporter.CrashReport(symbolicator.Symbolicator(
+        symbolicator.symbolicate, lambda crash: symbolicator.parse_reason(crash, reasons)))
+        
+    classified_crashes = report.get_symbolicated_crashes(args.crash_dir)
+    crash_list = []
+    for v in classified_crashes:
+        crash_list.extend(v[1])
+    crash_parser.save_crashes_to_csv_file(crash_list, args.out_file)
 
 
 def _do_report(args):
@@ -83,6 +93,7 @@ def _do_parse_args():
     sub_parser = sub_parsers.add_parser(
         'save_csv', help='save crashes to csv files')
     sub_parser.add_argument('crash_dir', help='clashes dir')
+    sub_parser.add_argument('reason_file', help='reason file')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_save_crashes_to_csv)
 
