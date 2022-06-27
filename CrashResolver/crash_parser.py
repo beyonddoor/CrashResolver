@@ -6,10 +6,10 @@
 from enum import Enum
 from pathlib import Path
 import os
-import argparse
 import re
 
-from . import setup
+import csv
+
 
 class ParseState(Enum):
     Init = 0,
@@ -135,7 +135,18 @@ def read_crash_list(crash_dir: str, is_rough) -> list:
     return crashes
 
 
-def classify_by_stack(crash_list: list) -> dict:
+def save_crashes_to_csv_file(crash_list: list[dict], csv_file: str):
+    '''保存crash到csv文件'''
+    with open(csv_file, 'w', encoding='utf8') as file:
+        writer = csv.writer(file, 'excel')
+        writer.writerow(crash_list[0].keys())
+
+        for crash in crash_list:
+            writer.writerow(crash.values())
+
+
+def classify_by_stack(crash_list: list[dict]) -> dict[str, dict]:
+    '''根据stack的指纹分类crash'''
     crashes = {}
     for crash in crash_list:
         fingerprint = crash['stack_key']
@@ -147,14 +158,15 @@ def classify_by_stack(crash_list: list) -> dict:
     return crashes
 
 
-def stringify_crash(crash):
+def stringify_crash(crash: dict) -> str:
     return str(crash)
 
 
-def dump(crash_list, filename: str):
+def save_crashes_to_file(crash_list, filename: str):
+    '''将crash的写入文件'''
     with open(filename, 'w', encoding='utf8') as file:
         for crashes_pair in crash_list:
-            file.write(f'\n------ {crashes_pair[1]} in total ------\n')
+            file.write(f'\n------ {len(crashes_pair[1])} in total ------\n')
 
             for crash in crashes_pair[1]:
                 file.write(str(crash))
@@ -173,69 +185,3 @@ def read_os_names(filename) -> set:
     with open(filename, 'r', encoding='utf8') as file:
         lines = file.read().split('\n')
     return set(line for line in lines if line.strip() != '')
-
-
-def _do_classify(args):
-    '''统计stack指纹'''
-    crash_list = read_crash_list(args.crash_dir, args.is_rough)
-    os_names = set()
-    if args.os_file:
-        os_names = read_os_names(args.os_file)
-
-    for crash in crash_list:
-        crash['os_symbol_ready'] = is_os_available(crash, os_names)
-
-    crashes = classify_by_stack(crash_list)
-
-    crashes_sort = list(crashes.items())
-    crashes_sort.sort(key=lambda x: len(x[1]), reverse=True)
-    dump(crashes_sort, args.out_file)
-
-
-def _do_stat_os(args):
-    '''统计os'''
-    crash_list = read_crash_list(args.crash_dir, False)
-    crash_dict = {}
-    for crash in crash_list:
-        arm64e = '(arm64e)' if crash['is_arm64e'] else ''
-        os_version = crash['Code Type'] + arm64e + ":" + crash['OS Version']
-        if os_version not in crash_dict:
-            crash_dict[os_version] = 0
-        crash_dict[os_version] += 1
-
-    sort_list = list(crash_dict.items())
-    sort_list.sort(key=lambda x: x[1], reverse=True)
-    with open(args.out_file, 'w', encoding='utf8') as file:
-        for os_version, count in sort_list:
-            file.write(f'{count}\t{os_version}\n')
-
-
-def _do_parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--setting_file', help='a ini setting file', default='setting.ini')
-
-    sub_parsers = parser.add_subparsers()
-
-    sub_parser = sub_parsers.add_parser(
-        'classify', help='classify crashes by stack fingerprint')
-    sub_parser.add_argument(
-        '--is_rough', help='is rough stack fingerprint', action='store_true', dest='is_rough')
-    sub_parser.add_argument('--os_file', help='downloaded os names')
-    sub_parser.add_argument('crash_dir', help='clashes dir')
-    sub_parser.add_argument('out_file', help='output file')
-    sub_parser.set_defaults(func=_do_classify)
-
-    sub_parser = sub_parsers.add_parser(
-        'stat_os', help='statistics crashed iOS platforms')
-    sub_parser.add_argument('crash_dir', help='clashes dir')
-    sub_parser.add_argument('out_file', help='output file')
-    sub_parser.set_defaults(func=_do_stat_os)
-
-    args = parser.parse_args()
-    setup.setup(args.setting_file)
-    args.func(args)
-
-
-if __name__ == '__main__':
-    _do_parse_args()

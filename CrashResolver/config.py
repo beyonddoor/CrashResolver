@@ -28,7 +28,7 @@ def parse_config(filename):
             config.read_file(file)
             section = config['global']
             CrashExt = section.get('CrashExt', '.txt')
-            SymbolExt = section.get('CrashExt', '.sym')
+            SymbolExt = section.get('SymbolExt', '.sym')
             SymbolicatePath = section.get('SymbolicatePath', '.sym')
             CrashRepoUrl = section.get('CrashRepoUrl', '.sym')
             LogConfigFile = section.get('LogConfigFile', 'log.yaml')
