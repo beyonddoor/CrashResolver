@@ -29,8 +29,9 @@ class CrashReport:
     统计所有的crash，自动输出报告
     '''
 
-    def __init__(self, symbol_obj:Symbolicator) -> None:
+    def __init__(self, symbol_obj:Symbolicator, parser: crash_parser.BaseCrashParser) -> None:
         self._symbolicator = symbol_obj
+        self._crash_parser = parser
 
     def _save_reason_stats(self, file, reasons_stat):
         file.write(
@@ -67,8 +68,7 @@ class CrashReport:
 
     def get_symbolicated_crashes(self, crash_dir: str):
         symbolicated_crashes = set(find_symbolated_crashes(crash_dir))
-
-        crash_list = crash_parser.read_crash_list(crash_dir, False)
+        crash_list = self._crash_parser.read_crash_list(crash_dir, False)
         key_crashes_map = crash_parser.classify_by_stack(crash_list)
         pairs_sorted = list(key_crashes_map.items())
         pairs_sorted.sort(key=lambda x: len(x[1]), reverse=True)

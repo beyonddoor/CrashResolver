@@ -7,7 +7,7 @@ from . import reporter
 
 def _do_classify(args):
     '''统计stack指纹'''
-    crash_list = crash_parser.read_crash_list(args.crash_dir, args.is_rough)
+    crash_list = crash_parser.IosCrashParser(args.is_rough).read_crash_list(args.crash_dir)
     os_names = set()
     if args.os_file:
         os_names = crash_parser.read_os_names(args.os_file)
@@ -25,7 +25,7 @@ def _do_classify(args):
 
 def _do_stat_os(args):
     '''统计os'''
-    crash_list = crash_parser.read_crash_list(args.crash_dir, False)
+    crash_list = crash_parser.IosCrashParser(False).read_crash_list(args.crash_dir)
     crash_dict = {}
     for crash in crash_list:
         arm64e = '(arm64e)' if crash['is_arm64e'] else ''
@@ -46,15 +46,28 @@ def _do_save_crashes_to_csv(args):
     with open(args.reason_file, 'r', encoding='utf8') as file:
         reasons = [line.strip()
                    for line in file.read().split('\n') if line.strip() != '']
+
+    parser = crash_parser.IosCrashParser(False) 
     report = reporter.CrashReport(symbolicator.Symbolicator(
-        symbolicator.symbolicate, lambda crash: symbolicator.parse_reason(crash, reasons)))
+        symbolicator.symbolicate, 
+        lambda crash: symbolicator.parse_reason(crash, reasons),
+        parser),
+        parser
+        )
         
     classified_crashes = report.get_symbolicated_crashes(args.crash_dir)
     crash_list = []
     for v in classified_crashes:
         crash_list.extend(v[1])
     crash_parser.save_crashes_to_csv_file(crash_list, args.out_file)
-
+    
+def _do_classify_android(args):
+    '''统计stack指纹'''
+    crash_list = crash_parser.AndroidCrashParser().read_crash_list(args.crash_dir)
+    crashes = crash_parser.classify_by_stack(crash_list)
+    crashes_sort = list(crashes.items())
+    crashes_sort.sort(key=lambda x: len(x[1]), reverse=True)
+    crash_parser.save_crashes_to_file(crashes_sort, args.out_file)
 
 def _do_report(args):
     crash_dir = args.crash_dir
@@ -63,8 +76,14 @@ def _do_report(args):
     with open(args.reason_file, 'r', encoding='utf8') as file:
         reasons = [line.strip()
                    for line in file.read().split('\n') if line.strip() != '']
+
+    parser = crash_parser.IosCrashParser(False)
+
     report = reporter.CrashReport(symbolicator.Symbolicator(
-        symbolicator.symbolicate, lambda crash: symbolicator.parse_reason(crash, reasons)))
+        symbolicator.symbolicate, 
+        lambda crash: symbolicator.parse_reason(crash, reasons),
+        parser),
+        parser)
     report.generate_report(crash_dir, output_file)
 
 
@@ -83,6 +102,12 @@ def _do_parse_args():
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_classify)
+
+    sub_parser = sub_parsers.add_parser(
+        'classify_android', help='classify android crashes by stack fingerprint')
+    sub_parser.add_argument('crash_dir', help='clashes dir')
+    sub_parser.add_argument('out_file', help='output file')
+    sub_parser.set_defaults(func=_do_classify_android)
 
     sub_parser = sub_parsers.add_parser(
         'stat_os', help='statistics crashed iOS platforms')

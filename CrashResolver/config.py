@@ -17,10 +17,24 @@ SymbolicatePath = './symbolicate.sh'
 CrashRepoUrl = ''
 '''crash文件的仓库地址'''
 
+AndroidCrashRepoUrl = ''
+'''android crash文件的仓库地址'''
+
+Token = ""
+'''登陸的token'''
+
+Product = ''
+'''产品'''
+
+ProductId = ''
+'''产品id'''
 
 def parse_config(filename):
     '''parse config'''
-    global CrashExt, SymbolExt, SymbolicatePath, CrashRepoUrl, LogConfigFile
+    global CrashExt, SymbolExt, SymbolicatePath, CrashRepoUrl, LogConfigFile, Token
+    global AndroidCrashRepoUrl
+    global Product
+    global ProductId
 
     try:
         with open(filename, 'r', encoding='utf8') as file:
@@ -30,8 +44,12 @@ def parse_config(filename):
             CrashExt = section.get('CrashExt', '.txt')
             SymbolExt = section.get('SymbolExt', '.sym')
             SymbolicatePath = section.get('SymbolicatePath', '.sym')
-            CrashRepoUrl = section.get('CrashRepoUrl', '.sym')
+            CrashRepoUrl = section.get('CrashRepoUrl', '')
+            AndroidCrashRepoUrl = section.get('AndroidCrashRepoUrl', '')
             LogConfigFile = section.get('LogConfigFile', 'log.yaml')
+            Product = section.get('Product', '')
+            ProductId = section.get('ProductId', '')
+            Token = section.get('Token', '')
 
     except Exception as e:
         print(f'parse config "{filename}" error: {e}')
@@ -45,4 +63,8 @@ def write_config(filename):
         config['SymbolExt'] = SymbolExt
         config['SymbolicatePath'] = SymbolicatePath
         config['CrashRepoUrl'] = CrashRepoUrl
+        config['AndroidCrashRepoUrl'] = AndroidCrashRepoUrl
+        config['Token'] = Token
+        config['Product'] = Product
+        config['ProductId'] = ProductId
         config.write(file)
