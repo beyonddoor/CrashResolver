@@ -1,6 +1,5 @@
 '''
-对已经fetch的所有crash，进行汇总。
-初步的汇总比较简单，将stack生成指纹（fingerprint），根据指纹汇总。
+解析ios和android的crash文件，结构化为一个dict
 '''
 
 from enum import Enum
@@ -11,8 +10,10 @@ import csv
 
 from . import config
 
+
 class ParseError(Exception):
     pass
+
 
 class BaseCrashParser:
     def parse_crash(self, text: str) -> dict:
@@ -22,11 +23,10 @@ class BaseCrashParser:
         '''从文件中提取crash'''
         try:
             with open(filename, 'r', encoding='utf8', errors="ignore") as file:
-                text = file.read()
-                crash = self.parse_crash(text)
+                crash = self.parse_crash(file.read())
                 return crash
-        except ParseError as e:
-            print(f'invalid android crash {filename}, {e}')
+        except ParseError as err:
+            print(f'invalid android crash {filename}, {err}')
             return None
 
     def read_crash_list(self, crash_dir: str) -> list:
@@ -40,7 +40,7 @@ class BaseCrashParser:
                 crash = self.read_crash(Path(root)/filename)
                 if crash is None:
                     continue
-                
+
                 crash['filename'] = filename
                 crashes.append(crash)
         return crashes
@@ -63,28 +63,45 @@ class AndroidCrashParser(BaseCrashParser):
     '''从text中解析android crash信息'''
 
     def __init__(self) -> None:
-        self._is_rough = False
+        pass
 
     @staticmethod
-    def stack_fingerprint(stacks: list[str], is_rough) -> str:
+    def _normalize_path(path: str, default: str) -> str:
+        '''app的路径可能会变化，标准化'''
+        parts = path.split('/')
+        parts[3] = default
+        return '/'.join(parts)
+
+    @staticmethod
+    def stack_fingerprint(stacks: list[str]) -> str:
         '''从stack计算一个指纹'''
         # #00 pc 0006b6d8  /system/lib/arm711/nb/libc.so (pthread_kill+0)
         lines = []
+
         for stack in stacks:
             if stack.startswith('backtrace:'):
                 continue
             parts = stack.strip().split(' ', 4)
-            del parts[2]
+            if parts[-1].startswith('/data/app/com.longtugame.yjfb'):
+                # 游戏的so符号地址应该是相同的
+                parts[-1] = AndroidCrashParser._normalize_path(
+                    parts[-1], 'com.longtugame.yjfb')
+            else:
+                # 非游戏的so符号地址不确定
+                parts[2] = '(MAY_CHANGE_PER_OS)'
             lines.append(' '.join(parts))
+
         return '\n'.join(lines)
 
     def parse_crash(self, text: str) -> dict:
         '''从文本解析crash信息，保存结果为字典'''
-        lines = text.split('\n')
         stacks = []
         reason_lines = []
         crash = {}
+        logs = []
+        log_line_pattern = None
         state = AndroidParseState.INIT
+        lines = text.splitlines()
         for index, line in enumerate(lines):
             if state == AndroidParseState.INIT:
                 if line.startswith("***"):
@@ -92,11 +109,25 @@ class AndroidCrashParser(BaseCrashParser):
             elif state == AndroidParseState.HEADER:
                 if line.startswith("**"):
                     continue
+
                 _parse_header(crash, line)
+
                 if line.startswith('pid: '):
+                    # pid: 20433, tid: 20625
+                    match = re.match('pid: ([^,]+), tid: ([^,]+)', line)
+                    if match:
+                        crash['crash_pid'] = match.groups()[0]
+                        crash['crash_tid'] = match.groups()[1]
+                        log_line_pattern = re.compile(
+                            f"[0-9]+.* {crash['crash_pid']} +{crash['crash_tid']} .*")
+                        log_line = f" {crash['crash_pid']} {crash['crash_tid']} " if int(
+                            crash['crash_tid']) >= 10000 else f" {crash['crash_pid']}  {crash['crash_tid']} "
+
                     state = AndroidParseState.REASON
-                    if not lines[index + 1].startswith('signal ') or not lines[index + 2].startswith('    r0'):
-                        raise ParseError('invalid android crash')
+
+                    if not lines[index + 1].startswith('signal ') or not lines[index + 2].startswith('    '):
+                        # 没有traceback，提取log
+                        state = AndroidParseState.LOG
 
             elif state == AndroidParseState.REASON:
                 # TODO 解析reason
@@ -106,19 +137,30 @@ class AndroidCrashParser(BaseCrashParser):
                     reason_lines.append(line)
 
             elif state == AndroidParseState.BACKTRACE:
-                
                 if line == '':
                     state = AndroidParseState.LOG
                 else:
                     stacks.append(line)
 
             elif state == AndroidParseState.LOG:
-                break
+                if log_line_pattern is None:
+                    break
+                if len(line) > 0 and line[0] >= '0' and line[0] <= '9' and re.match(log_line_pattern, line) is not None:
+                    logs.append(line)
+                # if log_line is None:
+                #     break
+                # if len(line)>0 and line[0]>='0' and line[0]<='9' and log_line in line:
+                #     logs.append(line)
 
         crash['stacks'] = stacks
-        crash['reason'] = '\n'.join(reason_lines)
-        crash['stack_key'] = AndroidCrashParser.stack_fingerprint(
-            stacks, self._is_rough)
+        crash['thread_logs'] = '\n'.join(logs)
+
+        if len(stacks) == 0:
+            crash['reason'] = 'NO_BACKTRACE'
+            crash['stack_key'] = 'NO_BACKTRACE'
+        else:
+            crash['reason'] = '\n'.join(reason_lines)
+            crash['stack_key'] = AndroidCrashParser.stack_fingerprint(stacks)
         return crash
 
 
@@ -183,11 +225,11 @@ class IosCrashParser(BaseCrashParser):
 
     def parse_crash(self, text: str) -> dict:
         '''从文本解析crash信息，保存结果为字典'''
-        lines = text.split('\n')
         stacks = []
         crash = {}
         state = IosParseState.HEADER
         stack_frameworks = {}
+        lines = text.splitlines()
 
         for line in lines:
             if state == IosParseState.HEADER:
@@ -235,55 +277,3 @@ def _parse_header(headers: dict, text: str):
         return
     arr = text.split(':')
     headers[arr[0]] = arr[1].strip()
-
-
-def save_crashes_to_csv_file(crash_list: list[dict], csv_file: str):
-    '''保存crash到csv文件'''
-    with open(csv_file, 'w', encoding='utf8') as file:
-        writer = csv.writer(file, 'excel')
-        writer.writerow(crash_list[0].keys())
-
-        for crash in crash_list:
-            writer.writerow(crash.values())
-
-
-def classify_by_stack(crash_list: list[dict]) -> dict[str, dict]:
-    '''根据stack的指纹分类crash'''
-    crashes = {}
-    for crash in crash_list:
-        fingerprint = crash['stack_key']
-        if fingerprint not in crashes:
-            crashes[fingerprint] = []
-
-        crashes[fingerprint].append(crash)
-
-    return crashes
-
-
-def stringify_crash(crash: dict) -> str:
-    return str(crash)
-
-
-def save_crashes_to_file(crash_list, filename: str):
-    '''将crash的写入文件'''
-    with open(filename, 'w', encoding='utf8') as file:
-        for crashes_pair in crash_list:
-            file.write(f'\n------ {len(crashes_pair[1])} in total ------\n')
-
-            for crash in crashes_pair[1]:
-                file.write(str(crash))
-                file.write("\n")
-
-
-def is_os_available(crash: dict, os_names: set) -> bool:
-    '''os的符号是否可用'''
-    arm64e = 'arm64e' if crash['is_arm64e'] else 'arm64'
-    return (crash['OS Version'] + ' ' + arm64e) in os_names
-
-
-def read_os_names(filename) -> set:
-    '''读取已经下载就绪的os名字，比如 iPhone OS 13.6 (17G68) arm64e'''
-    lines = []
-    with open(filename, 'r', encoding='utf8') as file:
-        lines = file.read().split('\n')
-    return set(line for line in lines if line.strip() != '')

@@ -1,4 +1,7 @@
-'''generate a report from crashes'''
+'''输出报告'''
+
+
+# TODO 这个文件可以删掉，功能放到main中
 
 import os
 import argparse
@@ -10,6 +13,7 @@ from .symbolicator import Symbolicator
 
 from . import config
 from . import crash_parser
+from . import crashdb_util
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +33,7 @@ class CrashReport:
     统计所有的crash，自动输出报告
     '''
 
-    def __init__(self, symbol_obj:Symbolicator, parser: crash_parser.BaseCrashParser) -> None:
+    def __init__(self, symbol_obj: Symbolicator, parser: crash_parser.BaseCrashParser) -> None:
         self._symbolicator = symbol_obj
         self._crash_parser = parser
 
@@ -52,7 +56,7 @@ class CrashReport:
             file.write('\n')
 
             for crash in pair[1]:
-                file.write(crash_parser.stringify_crash(crash))
+                file.write(str(crash))
                 file.write("\n")
 
         reasons_stat = {}
@@ -69,12 +73,13 @@ class CrashReport:
     def get_symbolicated_crashes(self, crash_dir: str):
         symbolicated_crashes = set(find_symbolated_crashes(crash_dir))
         crash_list = self._crash_parser.read_crash_list(crash_dir, False)
-        key_crashes_map = crash_parser.classify_by_stack(crash_list)
+        key_crashes_map = crashdb_util.classify_by_stack(crash_list)
         pairs_sorted = list(key_crashes_map.items())
         pairs_sorted.sort(key=lambda x: len(x[1]), reverse=True)
 
         for pair in pairs_sorted:
-            self._symbolicator.symbolicate_same_crashes(pair[1], crash_dir, symbolicated_crashes)
+            self._symbolicator.symbolicate_same_crashes(
+                pair[1], crash_dir, symbolicated_crashes)
 
         return pairs_sorted
 

@@ -46,17 +46,21 @@ class Symbolicator:
         for crash in crash_list:
             if crash['filename'][0:-len(config.CrashExt)] in symbolicate_crashes:
                 found_crash = crash
-                logger.info('--- already symbolicated: {filename}', filename=found_crash["filename"])
+                logger.info(
+                    '--- already symbolicated: {filename}', filename=found_crash["filename"])
                 break
 
         # 没有符号化，则先符号化有代表性的crash，解析符号化之后的文件
         if found_crash is None:
             found_crash = crash_list[0]
-            logger.info('--- try symbolicate file: {filename}', filename=found_crash["filename"])
+            logger.info(
+                '--- try symbolicate file: {filename}', filename=found_crash["filename"])
             self._symbol_func(crash_dir_obj / found_crash['filename'])
 
-        result_filename = found_crash['filename'][0:-len(config.CrashExt)] + config.SymbolExt
-        final_crash = self._crash_parser.read_crash(crash_dir_obj / result_filename)
+        result_filename = found_crash['filename'][0:-
+                                                  len(config.CrashExt)] + config.SymbolExt
+        final_crash = self._crash_parser.read_crash(
+            crash_dir_obj / result_filename)
 
         reason = self._parse_reason_func(final_crash)
         print(config.SymbolExt, result_filename, reason)
