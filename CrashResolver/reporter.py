@@ -9,10 +9,10 @@ from pathlib import Path
 
 import logging
 
-from .symbolicator import Symbolicator
+from .ios.symbolicator import Symbolicator
 
 from . import config
-from . import crash_parser
+from .ios import crash_parser
 from . import crashdb_util
 
 logger = logging.getLogger(__name__)

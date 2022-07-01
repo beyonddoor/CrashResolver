@@ -24,7 +24,7 @@ class AndroidParseState(Enum):
     '''解析日志'''
 
 
-class AndroidCrashParser(BaseCrashParser):
+class TumbstoneParser(BaseCrashParser):
     '''从text中解析android crash信息'''
 
     def __init__(self) -> None:
@@ -49,7 +49,7 @@ class AndroidCrashParser(BaseCrashParser):
             parts = stack.strip().split(' ', 4)
             if parts[-1].startswith('/data/app/com.longtugame.yjfb'):
                 # 游戏的so符号地址应该是相同的
-                parts[-1] = AndroidCrashParser._normalize_path(
+                parts[-1] = TumbstoneParser._normalize_path(
                     parts[-1], 'com.longtugame.yjfb')
             else:
                 # 非游戏的so符号地址不确定
@@ -125,7 +125,7 @@ class AndroidCrashParser(BaseCrashParser):
             crash['stack_key'] = 'NO_BACKTRACE'
         else:
             crash['reason'] = '\n'.join(reason_lines)
-            crash['stack_key'] = AndroidCrashParser.stack_fingerprint(stacks)
+            crash['stack_key'] = TumbstoneParser.stack_fingerprint(stacks)
         return crash
 
 
@@ -133,5 +133,6 @@ def _parse_header(headers: dict, text: str):
     '''提取键值对'''
     if text == '':
         return
-    arr = text.split(':')
+    arr = text.split(':', maxsplit=1)
     headers[arr[0]] = arr[1].strip()
+

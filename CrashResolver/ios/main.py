@@ -7,9 +7,9 @@ from itertools import groupby
 import operator
 
 from CrashResolver import database_csv
-from .. import crash_parser
+from . import crash_parser
 from .. import setup
-from .. import symbolicator
+from . import symbolicator
 from .. import reporter
 from .. import crashdb_util
 from .. import util

@@ -119,5 +119,5 @@ def _parse_header(headers: dict, text: str):
     '''提取键值对'''
     if text == '':
         return
-    arr = text.split(':')
+    arr = text.split(':', maxsplit=1)
     headers[arr[0]] = arr[1].strip()

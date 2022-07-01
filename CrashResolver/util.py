@@ -17,3 +17,10 @@ def read_lines(filename):
     with open(filename, 'r', encoding='utf8') as f:
         lines = f.read().splitlines()
     return list(line for line in lines if line.strip() != '')
+
+def dump_to_txt(filename: str, dict_list: list[dict]):
+    '''保存所有的dict到txt文件'''
+    with open(filename, 'w', encoding='utf8') as file:
+        for item in dict_list:
+            file.write(str(item))
+            file.write('\n')
