@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from . import config
+from .. import config
 from . import crash_parser
 
 logger = logging.getLogger(__name__)

@@ -7,12 +7,12 @@ from itertools import groupby
 import operator
 
 from CrashResolver import database_csv
-from . import crash_parser
-from . import setup
-from . import symbolicator
-from . import reporter
-from . import crashdb_util
-from . import util
+from .. import crash_parser
+from .. import setup
+from .. import symbolicator
+from .. import reporter
+from .. import crashdb_util
+from .. import util
 
 # def _do_save_csv_ios(args):
 #     reasons = []
@@ -35,37 +35,7 @@ from . import util
 #     crash_parser.save_crashes_to_csv_file(crash_list, args.out_file)
 
 
-def update_reason_android(crash: dict, reasons: list):
-    if crash['thread_logs'] == '':
-        crash['reason_log'] = 'empty'
-        return
-
-    for reason in reasons:
-        if reason in crash['thread_logs']:
-            crash['reason_log'] = reason
-            return
-    crash['reason_log'] = 'unknown'
-
-
-def _do_update_reasons_android(args):
-    crash_list = database_csv.load(args.db_file)
-    reasons = util.read_lines(args.reason_file)
-
-    for crash in crash_list:
-        if len(crash) < 10:
-            continue
-        update_reason_android(crash, reasons)
-
-    database_csv.save(args.db_file, crash_list)
-
-
-def _do_save_csv_android(args):
-    '''save csv'''
-    crash_list = crash_parser.AndroidCrashParser().read_crash_list(args.crash_dir)
-    database_csv.save(args.out_file, crash_list)
-
-
-def _do_update_os_names_ios(args):
+def _do_update_os_names(args):
     crash_list = database_csv.load(args.db_file)
     os_names = set(util.read_lines(args.os_file))
 
@@ -76,19 +46,19 @@ def _do_update_os_names_ios(args):
     database_csv.save(args.db_file, crash_list)
 
 
-def _do_update_symbol_ios(args):
+def _do_update_symbol(args):
     # TODO 将符号化集成进来
     pass
 
 
-def _do_save_csv_ios(args):
+def _do_save_csv(args):
     '''save csv'''
     crash_list = crash_parser.IosCrashParser(
         False).read_crash_list(args.crash_dir)
     database_csv.save(args.out_file, crash_list)
 
 
-def _do_group_by_stack_key_ios(args):
+def _do_group_by_stack_key(args):
     crash_list = database_csv.load(args.db_file)
     crash_list.sort(key=lambda x: x['stack_key'], reverse=True)
     group_obj = groupby(crash_list, lambda x: x['stack_key'])
@@ -137,65 +107,10 @@ def _do_report(args):
     report.generate_report(crash_dir, output_file)
 
 
-def _do_list_broken(args):
-    crash_list = database_csv.load(args.arg1)
-    for crash in crash_list:
-        if len(crash) < 10:
-            print(str(crash))
-
-
-def _do_list_unkown_reason(args):
-    crash_list = database_csv.load(args.arg1)
-
-    list_filtered = [crash for crash in crash_list if len(
-        crash) >= 10 and crash['reason_log'] == 'unknown']
-    list_filtered.sort(key=lambda x: x['stack_key'], reverse=True)
-    group_obj = groupby(list_filtered, lambda x: x['stack_key'])
-    groups = [[crash for crash in lists]
-              for (key, lists) in group_obj]  # operator.attrgetter('stack_key')
-    groups.sort(key=len, reverse=True)
-
-    for lists in groups:
-        print(f'==========={len(lists)}\n')
-        for crash in lists:
-            print(str(crash))
-
-
-def _do_list_unkown_reason_logs(args):
-    crash_list = database_csv.load(args.arg1)
-
-    list_filtered = [crash for crash in crash_list if len(
-        crash) >= 10 and crash['reason_log'] == 'unknown']
-    list_filtered.sort(key=lambda x: x['stack_key'], reverse=True)
-    group_obj = groupby(list_filtered, lambda x: x['stack_key'])
-    groups = [[crash for crash in lists] for (key, lists) in group_obj]
-    groups.sort(key=len, reverse=True)
-
-    for lists in groups:
-        print(f'==========={len(lists)}\n')
-        for crash in lists:
-            print(f'{crash["filename"]}\n')
-            print(f'{crash["thread_logs"]}\n')
-
-
-def _do_stat_reasons(args):
-    crash_list = database_csv.load(args.arg1)
-
-    list_filtered = [crash for crash in crash_list if len(crash) >= 10]
-    list_filtered.sort(key=lambda x: x['reason_log'], reverse=True)
-    group_obj = groupby(list_filtered, lambda x: x['reason_log'])
-    groups = [(key, len(list(lists)))
-              for (key, lists) in group_obj]  # operator.attrgetter('stack_key')
-    groups.sort(key=lambda x: x[1], reverse=True)
-
-    print(len(crash_list))
-    for lists in groups:
-        print(f'{lists[1]}\t{lists[0]}')
-
-
 def _do_test(args):
+    pass
     # _do_list_unkown_reason(args)
-    _do_stat_reasons(args)
+    # _do_stat_reasons(args)
     # _do_list_unkown_reason_logs(args)
 
 
@@ -206,30 +121,17 @@ def _do_parse_args():
 
     sub_parsers = parser.add_subparsers()
 
-    # android相关命令
-    sub_parser = sub_parsers.add_parser(
-        'save_csv_android', help='save android crashes to csv files')
-    sub_parser.add_argument('crash_dir', help='clashes dir')
-    sub_parser.add_argument('out_file', help='output file')
-    sub_parser.set_defaults(func=_do_save_csv_android)
-
-    sub_parser = sub_parsers.add_parser(
-        'update_reason_android', help='update android cause reason')
-    sub_parser.add_argument('db_file', help='csv database file')
-    sub_parser.add_argument('reason_file', help='reason file')
-    sub_parser.set_defaults(func=_do_update_reasons_android)
-
     # ios相关的命令
     sub_parser = sub_parsers.add_parser(
         'save_csv_ios', help='save ios crashes to csv files')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
-    sub_parser.set_defaults(func=_do_save_csv_ios)
+    sub_parser.set_defaults(func=_do_save_csv)
 
     sub_parser = sub_parsers.add_parser(
         'classify', help='classify crashes by stack fingerprint')
     sub_parser.add_argument('db_file', help='csv database file')
-    sub_parser.set_defaults(func=_do_group_by_stack_key_ios)
+    sub_parser.set_defaults(func=_do_group_by_stack_key)
 
     sub_parser = sub_parsers.add_parser(
         'stat_os', help='statistics crashed iOS platforms')
