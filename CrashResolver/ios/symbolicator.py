@@ -63,7 +63,7 @@ class Symbolicator:
             crash_dir_obj / result_filename)
 
         reason = self._parse_reason_func(final_crash)
-        print(config.SymbolExt, result_filename, reason)
+        # print(config.SymbolExt, result_filename, reason)
         for crash in crash_list:
             crash['crash_reason'] = reason
             crash['symbol_stacks'] = final_crash['stacks']

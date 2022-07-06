@@ -12,6 +12,7 @@ def get_values(dict, headers, default):
 def save(csv_file: str, dict_list: list[dict], headers=None):
     '''保存所有的dict到csv文件'''
     with open(csv_file, 'w', encoding='utf8') as file:
+        # TODO 考虑使用DictWriter
         writer = csv.writer(file, 'excel')
         if headers is None:
             headers = dict_list[0].keys()
@@ -25,6 +26,7 @@ def load(csv_file: str):
     csv.field_size_limit(sys.maxsize)
 
     with open(csv_file, 'r', encoding='utf8') as file:
+        # TODO 考虑使用DictReader
         reader = csv.reader(file, 'excel')
         items = []
         headers = []

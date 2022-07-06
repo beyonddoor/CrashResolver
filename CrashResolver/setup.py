@@ -3,8 +3,7 @@ setup config and log.
 '''
 
 import logging.config
-
-# import yaml
+import yaml
 
 from . import config
 
@@ -15,10 +14,9 @@ def init_log(filename):
         with open(filename, 'r', encoding='utf8') as file:
             log_dict = yaml.safe_load(file)
             logging.config.dictConfig(log_dict)
-    except Exception as e:
-        # logging.error(
-        #     'init_log "{filename}" error: {error}', filename=filename, error=e)
-        pass
+            logging.info('init_log successfully')
+    except Exception as err:
+        logging.error('init_log "%s" failed: %s', filename, err)
 
 
 def setup(filename):

@@ -1,6 +1,7 @@
 '''config for package'''
 
 import configparser
+import logging
 
 LogConfigFile = 'log.yaml'
 '''logging config file'''
@@ -29,6 +30,8 @@ Product = ''
 ProductId = ''
 '''产品id'''
 
+logger = logging.getLogger(__name__)
+
 def parse_config(filename):
     '''parse config'''
     global CrashExt, SymbolExt, SymbolicatePath, CrashRepoUrl, LogConfigFile, Token
@@ -51,8 +54,8 @@ def parse_config(filename):
             ProductId = section.get('ProductId', '')
             Token = section.get('Token', '')
 
-    except Exception as e:
-        print(f'parse config "{filename}" error: {e}')
+    except Exception as err:
+        logger.error('parse config "%s" error: %s', filename, err)
 
 
 def write_config(filename):

@@ -97,9 +97,7 @@ class AndroidCrashDownloader:
 
         save_dir = pathlib.Path(self._save_dir)
         json_data = response.json()
-        # print(str(config.__dict__))
-        # print(json_data)
-        print(f'page {page}')
+        logger.debug('page %s', page)
         self._total_page = json_data['data']['totalPage']
 
         tasks = []
@@ -127,10 +125,10 @@ class AndroidCrashDownloader:
         start_pos = crash_url.rfind('/', 0, end_pos)
         filename = crash_url[start_pos+1:end_pos]
         path = save_dir / (filename + config.CrashExt)
-        print(f'download file {filename}')
+        logger.info('download file %s', filename)
 
         if path.exists():
-            print(f'file {filename} exists, skip')
+            logger.warning('file %s exists, skip', filename)
             return
 
         return (crash_url, path)
@@ -145,10 +143,10 @@ class AndroidCrashDownloader:
         start_pos = crash_url.rfind('/', 0, end_pos)
         filename = crash_url[start_pos+1:end_pos]
         path = save_dir / (filename + '.zip')
-        print(f'download file {filename}')
+        logger.info('download file %s', filename)
 
         if path.exists():
-            print(f'file {filename} exists, skip ')
+            logger.info('file %s exists, skip ', filename)
             return
 
         return (crash_url, path)

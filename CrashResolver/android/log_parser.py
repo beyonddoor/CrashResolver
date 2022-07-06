@@ -1,5 +1,6 @@
 '''从log中提取tumbstone文件，可能不完备'''
 
+from asyncio.log import logger
 import enum
 import re
 
@@ -92,8 +93,6 @@ class CrashLogParser(BaseCrashParser):
         stacks = []
         reason_lines = []
         crash = {}
-        logs = []
-        log_line_pattern = None
         state = AndroidParseState.INIT
         lines = text.splitlines()
         for index, line in enumerate(lines):
@@ -143,6 +142,6 @@ def _parse_header(headers: dict, text: str):
         return
     arr = text.split(':', maxsplit=1)
     if len(arr) < 2:
-        print(f'unknown header {text}')
+        logger.error('unknown header %s', text)
         return
     headers[arr[0]] = arr[1].strip()

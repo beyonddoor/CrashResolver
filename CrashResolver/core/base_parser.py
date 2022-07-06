@@ -1,8 +1,11 @@
+from asyncio.log import logger
+import logging
 import os
 from pathlib import Path
 
 from .. import config
 
+logger = logging.getLogger(__name__)
 
 class ParseError(Exception):
     pass
@@ -19,7 +22,7 @@ class BaseCrashParser:
                 crash = self.parse_crash(file.read())
                 return crash
         except ParseError as err:
-            print(f'invalid android crash {filename}, {err}')
+            logger.error('invalid android crash %s, %s', filename, err)
             return None
 
     def read_crash_list(self, crash_dir: str) -> list:
