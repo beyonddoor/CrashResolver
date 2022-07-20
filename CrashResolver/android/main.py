@@ -114,8 +114,8 @@ def group_detail(dict_list:list[dict], key):
     '''根据key进行分类'''
     dict_list.sort(key=key, reverse=True)
     group_obj = groupby(dict_list, key)
-    groups = [(key, len(list(lists))) for (key, lists) in group_obj]
-    groups.sort(key=lambda x: x[1], reverse=True)
+    groups = [(key, list(lists)) for (key, lists) in group_obj]
+    groups.sort(key=lambda x: len(x[1]), reverse=True)
 
     print(f'total: #{len(dict_list)}')
     print(f'total groups: #{len(groups)}')
@@ -123,8 +123,11 @@ def group_detail(dict_list:list[dict], key):
 
     total = len(dict_list)
     for lists in groups:
-        print(f"========== {lists[1]}/{lists[1]/total:0.2} ==========")
+        print(f"========== {len(lists[1])}/{len(lists[1])/total:0.2} ==========")
         print(lists[0])
+        print('\n')
+        for i in lists[1][0:100]:
+            print(i['filename'])
         print('\n')
 
 
@@ -196,7 +199,7 @@ def _do_parse_args():
     sub_parsers = parser.add_subparsers()
 
     sub_parser = sub_parsers.add_parser(
-        'save_csv_android', help='save android crashes to csv files')
+        'save_csv', help='save android crashes to csv files')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.set_defaults(func=_create_db)

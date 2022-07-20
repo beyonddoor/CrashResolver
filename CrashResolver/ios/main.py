@@ -11,7 +11,6 @@ from . import crash_parser
 from .. import setup
 from . import symbolicator
 from .. import reporter
-from .. import crashdb_util
 from .. import util
 
 # def _do_save_csv_ios(args):
@@ -40,7 +39,7 @@ def _do_update_os_names(args):
     os_names = set(util.read_lines(args.os_file))
 
     for crash in crash_list:
-        crash['os_symbol_ready'] = crashdb_util.is_os_available(
+        crash['os_symbol_ready'] = util.is_os_available(
             crash, os_names)
 
     database_csv.save(args.db_file, crash_list)

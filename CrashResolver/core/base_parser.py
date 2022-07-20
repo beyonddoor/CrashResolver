@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import Path
 
-from .. import config
+from ..config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class BaseCrashParser:
         crashes = []
         for root, _, filenames in os.walk(crash_dir):
             for filename in filenames:
-                if not filename.endswith(config.CrashExt):
+                if not filename.endswith(get_config().CrashExt):
                     continue
 
                 crash = self.read_crash(Path(root)/filename)

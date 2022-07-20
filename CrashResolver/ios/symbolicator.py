@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from .. import config
+from ..config import get_config
 from . import crash_parser
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def parse_reason(crash, reasons) -> str:
 
 def symbolicate(filename):
     '''进行符号化'''
-    subprocess.run(['bash', config.SymbolicatePath, filename], check=False)
+    subprocess.run(['bash', get_config().SymbolicatePath, filename], check=False)
 
 
 class Symbolicator:
@@ -40,6 +40,7 @@ class Symbolicator:
 
     def symbolicate_same_crashes(self, crash_list: enumerate, crash_dir: str, symbolicate_crashes: list):
         '''将同一种crash指定原因和符号化的stack'''
+        config = get_config()
         crash_dir_obj = Path(crash_dir)
         found_crash = None
 
