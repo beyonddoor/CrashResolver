@@ -1,17 +1,21 @@
 '''提供一些命令行功能'''
 
 import argparse
+import json
+from pathlib import Path
 import sys
 from time import time
 from itertools import groupby
 import pprint
 import os
 
+
 from CrashResolver import database_csv
 from . import crash_parser
 from .. import setup
 from .. import util
 from . import log_parser
+from ..util import group_count, group_detail
 
 
 def update_reason_log(crash: dict, reasons: list):
@@ -73,6 +77,29 @@ def _remove_bad(args):
     database_csv.save(args.db_file, crash_list)
 
 
+def update_meta(crash_list, meta_dir):
+    '''更新meta信息'''
+    meta_dir_obj = Path(meta_dir)
+    for crash in crash_list:
+        meta_filename = meta_dir_obj / (Path(crash['filename']).stem + '.meta')
+        json_content = None
+        if meta_filename.exists():
+            with open(meta_filename, 'r', encoding='utf8') as f:
+                json_content = json.load(f)
+        if json_content:
+            crash['roleId'] = json_content.get('roleId', 'unkown')
+            crash['userId'] = json_content.get('userId', 'unkown')
+        else:
+            crash['roleId'] = 'unkown'
+            crash['userId'] = 'unkown'
+
+
+def _update_meta(args):
+    crash_list = database_csv.load(args.db_file)
+    update_meta(crash_list, args.meta_dir)
+    database_csv.save(args.db_file, crash_list)
+
+
 def _is_bad(crash):
     return len(crash) < 10
 
@@ -93,44 +120,6 @@ def _is_bad(crash):
 #             print(f'{crash["filename"]}\n')
 #             print(f'{crash["thread_logs"]}\n')
 
-
-def group_count(item_list, key):
-    '''根据key进行分类'''
-    item_list.sort(key=key, reverse=True)
-    group_obj = groupby(item_list, key)
-    groups = [(key, len(list(lists)))
-              for (key, lists) in group_obj]
-    groups.sort(key=lambda x: x[1], reverse=True)
-
-    total = len(item_list)
-    print(f'total: #{len(item_list)}')
-    print(f'total groups: #{len(groups)}')
-    print('\n')
-
-    for lists in groups:
-        print(f'{lists[1]}/{lists[1]/total:0.2}\t{lists[0]}')
-
-def group_detail(dict_list:list[dict], key):
-    '''根据key进行分类'''
-    dict_list.sort(key=key, reverse=True)
-    group_obj = groupby(dict_list, key)
-    groups = [(key, list(lists)) for (key, lists) in group_obj]
-    groups.sort(key=lambda x: len(x[1]), reverse=True)
-
-    print(f'total: #{len(dict_list)}')
-    print(f'total groups: #{len(groups)}')
-    print('\n')
-
-    total = len(dict_list)
-    for lists in groups:
-        print(f"========== {len(lists[1])}/{len(lists[1])/total:0.2} ==========")
-        print(lists[0])
-        print('\n')
-        for i in lists[1][0:100]:
-            print(i['filename'])
-        print('\n')
-
-
 def _do_test(args):
     # _do_list_unkown_reason(args)
     # _query_reason_log_stat(args)
@@ -139,6 +128,7 @@ def _do_test(args):
 
 
 def read_crashes(log_file, to_parse: bool):
+    '''从log文件中读取crash'''
     parser = log_parser.CrashLogParser()
     result = []
     with open(log_file, 'r', encoding='utf8', errors='ignore') as file:
@@ -181,15 +171,16 @@ def _create_logdb(args):
 def _group_by(args):
     crash_list = database_csv.load(args.db_file)
     if args.count_only:
-        group_count(crash_list, lambda x: x.get(args.column_name, 'unkown'))
+        group_count(crash_list, lambda x: x.get(args.column_name, 'unkown'), args.column_name)
     else:
-        group_detail(crash_list, lambda x: x.get(args.column_name, 'unkown'))
+        group_detail(crash_list, lambda x: x.get(args.column_name, 'unkown'), args.column_name)
 
 
 def _show_columns(args):
     crash_list = database_csv.load(args.db_file)
     pprint.pprint(crash_list[0].keys())
     pprint.pprint(crash_list[0].values())
+
 
 def _do_parse_args():
     parser = argparse.ArgumentParser()
@@ -231,12 +222,18 @@ def _do_parse_args():
     sub_parser = sub_parsers.add_parser('group_by')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.add_argument('column_name', help='column name')
-    sub_parser.add_argument('--count_only', help='count only', action='store_false')
+    sub_parser.add_argument(
+        '--count_only', help='count only', action='store_false')
     sub_parser.set_defaults(func=_group_by)
 
     sub_parser = sub_parsers.add_parser('columns', help='show columns')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.set_defaults(func=_show_columns)
+
+    sub_parser = sub_parsers.add_parser('update_meta', help='update meta')
+    sub_parser.add_argument('db_file', help='csv database file')
+    sub_parser.add_argument('meta_dir', help='meta dir')
+    sub_parser.set_defaults(func=_update_meta)
 
     sub_parser = sub_parsers.add_parser('test', help='test only')
     sub_parser.add_argument('arg1', help='arg1')

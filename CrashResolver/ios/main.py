@@ -12,6 +12,7 @@ from .. import setup
 from . import symbolicator
 from .. import reporter
 from .. import util
+from ..util import group_count, group_detail
 
 # def _do_save_csv_ios(args):
 #     reasons = []
@@ -59,33 +60,18 @@ def _do_save_csv(args):
 
 def _do_group_by_stack_key(args):
     crash_list = database_csv.load(args.db_file)
-    crash_list.sort(key=lambda x: x['stack_key'], reverse=True)
-    group_obj = groupby(crash_list, lambda x: x['stack_key'])
-    groups = [[crash for crash in lists] for (key, lists) in group_obj]
-    groups.sort(key=len, reverse=True)
+    group_detail(crash_list, lambda crash: crash['stack_key'], 'stack_key', 100)
 
-    for lists in groups:
-        print(f'==========={len(lists)}\n')
-        for crash in lists:
-            print(str(crash))
-
+def get_os_version(crash):
+    ''''''
+    arm64e = '(arm64e)' if crash['is_arm64e'] else ''
+    os_version = crash['Code Type'] + arm64e + ":" + crash['OS Version']
+    return os_version
 
 def _do_stat_os(args):
     '''统计os'''
     crash_list = database_csv.load(args.db_file)
-
-    crash_dict = {}
-    for crash in crash_list:
-        arm64e = '(arm64e)' if crash['is_arm64e'] else ''
-        os_version = crash['Code Type'] + arm64e + ":" + crash['OS Version']
-        if os_version not in crash_dict:
-            crash_dict[os_version] = 0
-        crash_dict[os_version] += 1
-
-    sort_list = list(crash_dict.items())
-    sort_list.sort(key=lambda x: x[1], reverse=True)
-    for os_version, count in sort_list:
-        print(f'{count}\t{os_version}')
+    group_detail(crash_list, get_os_version, 'os version', 10)
 
 
 def _do_report(args):
@@ -122,7 +108,7 @@ def _do_parse_args():
 
     # ios相关的命令
     sub_parser = sub_parsers.add_parser(
-        'save_csv_ios', help='save ios crashes to csv files')
+        'save_csv', help='save ios crashes to csv files')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('out_file', help='output file')
     sub_parser.set_defaults(func=_do_save_csv)

@@ -1,3 +1,46 @@
+'''公用的一些util'''
+
+from itertools import groupby
+
+def group_count(item_list, key, key_name):
+    '''根据key进行分类'''
+    item_list.sort(key=key, reverse=True)
+    group_obj = groupby(item_list, key)
+    groups = [(key, len(list(lists)))
+              for (key, lists) in group_obj]
+    groups.sort(key=lambda x: x[1], reverse=True)
+
+    total = len(item_list)
+    print(f'total: #{len(item_list)}')
+    print(f'groups count: #{len(groups)}')
+    print(f'groups key: #{key_name}')
+    print('\n')
+
+    for lists in groups:
+        print(f'{lists[1]}/{lists[1]/total:0.2}\t{lists[0]}')
+
+
+def group_detail(dict_list: list[dict], key, key_name, head=10):
+    '''根据key进行分类'''
+    dict_list.sort(key=key, reverse=True)
+    group_obj = groupby(dict_list, key)
+    groups = [(key, list(lists)) for (key, lists) in group_obj]
+    groups.sort(key=lambda x: len(x[1]), reverse=True)
+
+    print(f'Total: #{len(dict_list)}')
+    print(f'Groups Count: #{len(groups)}')
+    print('\n')
+
+    total = len(dict_list)
+    for lists in groups:
+        print(
+            f"========== {len(lists[1])} ({len(lists[1])*100/total:2.2f}%) ==========")
+        print(key_name, ': ', lists[0])
+        print()
+        for i in lists[1][0:head]:
+            print(i['filename'])
+        print()
+
 
 def is_os_available(crash: dict, os_names: set) -> bool:
     '''os的符号是否可用'''
@@ -24,3 +67,5 @@ def dump_to_txt(filename: str, dict_list: list[dict]):
         for item in dict_list:
             file.write(str(item))
             file.write('\n')
+            
+            

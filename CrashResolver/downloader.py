@@ -4,6 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pathlib
 import argparse
 import logging
+import json
+import urllib.parse
 
 import requests
 
@@ -11,6 +13,111 @@ from .config import get_config
 from . import setup
 
 logger = logging.getLogger(__name__)
+
+def create_query():
+    query = {
+        'groupId': 16,
+        'currentPage': 0,
+        'pageSize': 0,
+        'sort': '',
+        'order': '',
+        'product': '20000048',
+        'locale': '01',
+        'productId': '20000048',
+        'localeId': '01',
+        'startTime': '',
+        'endTime': '',
+        'rangeTime': '',
+        'roleregistertime': '',
+        'firstpaytime': '',
+        'lastpaytime': '',
+        'capricious': '',
+        'myKeywords': '',
+        'payStatus': '',
+        'callStatus': '',
+        'gameOrderType': '',
+        'gameOrderInfoType': '',
+        'isRepair': '',
+        'platform': 1,
+        'exceptionCode': '',
+        'logClient': '',
+        'operationLineId': '',
+        'platformId': '',
+        'advertiserCode': 'appsflyer',
+        'deviceGroupId': '',
+        'mainChannel': '',
+        'gameVersion': '',
+        'parentchannelId': '',
+        'channelId': '',
+        'subchannelId': '',
+        'advertiserTo': '',
+        'eventKey': '',
+        'serverId': '',
+        'propKey': '',
+        'custom': '',
+        'serviceType': '',
+        'serviceText': '',
+        'updateType': '',
+        'detail': '',
+        'userType': '',
+        'transactionid': '',
+        'userInfoType': '',
+        'userInfoText': '',
+        'deviceInfoType': '',
+        'deviceInfoText': '',
+        'packageStatus': '',
+        'packageLogType': '',
+        'giftInfoType': '',
+        'giftInfoText': '',
+        'payamount': '',
+        'bindPhones': '',
+        'bingEmails': '',
+        'bindState': '',
+        'closeState': '',
+        'isTestUser': '',
+        'status': 0,
+        'operateType': 0,
+        'operateTypeText': '',
+        'signKeyValid': '',
+        'signKey': '',
+        'chatInfo': '',
+        'payChannel': '',
+        'is_first': '',
+        'userId': '',
+        'area': '',
+        'server': '',
+        'action': '',
+        'subType': '',
+        'fnInterface': '',
+        'event': '',
+        'adPlatform': '',
+        'adName': '',
+        'adGroup': '',
+        'gameChannelId': '',
+        'chatLogType': '',
+        'auditStatus': '',
+        'reservationUser': '',
+        'reservationType': '',
+        'hotEventType': '',
+        'studiotag': '',
+        'isstudio': '',
+        '__mask__': 'false',
+        'totalCount': '',
+        'queryFrom': 1,
+    }
+    return query
+
+def build_query(query, start_time, end_time, game_version, platform):
+    config = get_config()
+    if start_time != '':
+        query['startTime'] = start_time + ' 00:00:00'
+    if end_time != '':
+        query['endTime'] = end_time + ' 23:59:59'
+    query['product'] = config.Product
+    query['productId'] = config.ProductId
+    query['gameVersion'] = game_version
+    query['platform'] = platform
+    print(query)
 
 def download(url_path_tuple):
     '''下载url到文件'''
@@ -22,6 +129,23 @@ def download_tasks(tasks):
     with ThreadPoolExecutor(max_workers=10) as exector:
         for task in tasks:
             exector.submit(download, task)
+            
+def query_server(query):
+    '''测试query'''
+    data = urllib.parse.urlencode(query)
+    # data = 'groupId=16&currentPage=1&pageSize=100&sort=&order=&product=20000048&locale=01&productId=20000048&localeId=01&startTime=2022-06-20%2000%3A00%3A00&endTime=2022-06-21%2023%3A59%3A59&rangeTime=&roleregistertime=&firstpaytime=&lastpaytime=&capricious=&myKeywords=&payStatus=&callStatus=&gameOrderType=&gameOrderInfoType=&isRepair=&platform=0&exceptionCode=&logClient=&operationLineId=&platformId=&advertiserCode=appsflyer&deviceGroupId=&mainChannel=&gameVersion=&parentchannelId=&channelId=&subchannelId=&advertiserTo=&eventKey=&serverId=&propKey=&custom=&serviceType=&serviceText=&updateType=&detail=&userType=&transactionid=&userInfoType=&userInfoText=&deviceInfoType=&deviceInfoText=&packageStatus=&packageLogType=&giftInfoType=&giftInfoText=&payamount=&bindPhones=&bingEmails=&bindState=&closeState=&isTestUser=&status=0&operateType=0&operateTypeText=&signKeyValid=&signKey=&chatInfo=&payChannel=&is_first=&userId=&area=&server=&action=&subType=&fnInterface=&event=&adPlatform=&adName=&adGroup=&gameChannelId=&chatLogType=&auditStatus=&reservationUser=&reservationType=&hotEventType=&studiotag=&isstudio=&__mask__=false&totalCount=95&queryFrom=1'
+    logger.debug('query_server %s', data)
+    response = requests.post(url=get_config().CrashRepoUrl, headers={
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            "content-type": "application/x-www-form-urlencoded",
+            "i18n-locale": "zh_CN",
+            "request-locale": "01",
+            "request-productid": get_config().ProductId,
+            "token": get_config().Token,
+            "x-requested-with": "XMLHttpRequest"
+        }, data=data)
+    return response
 
 class IosCrashDownloader:
     '''
@@ -29,12 +153,11 @@ class IosCrashDownloader:
     platform = 1
     '''
 
-    def __init__(self, save_dir, start_time, end_time, page_size) -> None:
+    def __init__(self, save_dir, query) -> None:
+        print(query)
         self._save_dir = save_dir
-        self._start_time = start_time
-        self._end_time = end_time
+        self._query = query
         self._total_page = None
-        self._page_size = page_size
         
     def _get_task(self, crash_data):
         crash_url = crash_data['crashurl']
@@ -44,25 +167,15 @@ class IosCrashDownloader:
         path = pathlib.Path(self._save_dir) / (filename + get_config().CrashExt)
         
         if path.exists():
-            logger.warning('file %s exists, skip ', filename)
+            logger.info('file %s exists, skip ', filename)
             return
         
         return (crash_url, path)
 
     def download_page(self, page):
-        '''下载一页'''
-        data = f'groupId=16&currentPage={page}&pageSize={self._page_size}&sort=&order=&product=20000048&locale=01&productId=20000048&localeId=01&startTime={self._start_time}%2000%3A00%3A00&endTime={self._end_time}%2023%3A59%3A59&rangeTime=%E4%BB%8A%E5%A4%A9&roleregistertime=&firstpaytime=&lastpaytime=&capricious=&myKeywords=&payStatus=&callStatus=&gameOrderType=&gameOrderInfoType=&isRepair=&platform=1&exceptionCode=&logClient=&operationLineId=&platformId=&advertiserCode=appsflyer&deviceGroupId=&mainChannel=&gameVersion=&parentchannelId=&channelId=&subchannelId=&advertiserTo=&eventKey=&serverId=&propKey=&custom=&serviceType=&serviceText=&updateType=&detail=&userType=&transactionid=&userInfoType=&userInfoText=&deviceInfoType=&deviceInfoText=&packageStatus=&packageLogType=&giftInfoType=&giftInfoText=&payamount=&bindPhones=&bingEmails=&bindState=&closeState=&isTestUser=&status=0&operateType=0&operateTypeText=&signKeyValid=&signKey=&chatInfo=&payChannel=&is_first=&userId=&area=&server=&action=&subType=&fnInterface=&event=&adPlatform=&adName=&adGroup=&gameChannelId=&chatLogType=&auditStatus=&reservationUser=&reservationType=&hotEventType=&studiotag=&isstudio=&__mask__=false&totalCount=52&queryFrom=1'
-        response = requests.post(url=get_config().CrashRepoUrl, headers={
-            "accept": "application/json, text/plain, */*",
-            "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "content-type": "application/x-www-form-urlencoded",
-            "i18n-locale": "zh_CN",
-            "request-locale": "01",
-            "request-productid": "20000048",
-            "token": get_config().Token,
-            "x-requested-with": "XMLHttpRequest"
-        }, data=data)
-
+        '''下载一页'''        
+        self._query['currentPage'] = page
+        response = query_server(self._query)
         json_data = response.json()
         logger.debug('json data = %s', json_data)
         self._total_page = json_data['data']['totalPage']
@@ -89,33 +202,20 @@ class AndroidCrashDownloader:
     platform = 0
     '''
 
-    def __init__(self, save_dir, start_time, end_time, page_size) -> None:
+    def __init__(self, save_dir, query) -> None:
         self._save_dir = save_dir
-        self._start_time = start_time
-        self._end_time = end_time
         self._total_page = None
-        self._page_size = page_size
+        self._query = query
 
     def download_page(self, page):
         '''download one page'''
-        config = get_config()
-        data = f'groupId=16&currentPage={page}&pageSize={self._page_size}&sort=&order=&product={config.Product}&locale=01&productId={config.ProductId}&localeId=01&startTime={self._start_time}%2000%3A00%3A00&endTime={self._end_time}%2023%3A59%3A59&rangeTime=&roleregistertime=&firstpaytime=&lastpaytime=&capricious=&myKeywords=&payStatus=&callStatus=&gameOrderType=&gameOrderInfoType=&isRepair=&platform=0&exceptionCode=&logClient=&operationLineId=&platformId=&advertiserCode=appsflyer&deviceGroupId=&mainChannel=&gameVersion=&parentchannelId=&channelId=&subchannelId=&advertiserTo=&eventKey=&serverId=&propKey=&custom=&serviceType=&serviceText=&updateType=&detail=&userType=&transactionid=&userInfoType=&userInfoText=&deviceInfoType=&deviceInfoText=&packageStatus=&packageLogType=&giftInfoType=&giftInfoText=&payamount=&bindPhones=&bingEmails=&bindState=&closeState=&isTestUser=&status=0&operateType=0&operateTypeText=&signKeyValid=&signKey=&chatInfo=&payChannel=&is_first=&userId=&area=&server=&action=&subType=&fnInterface=&event=&adPlatform=&adName=&adGroup=&gameChannelId=&chatLogType=&auditStatus=&reservationUser=&reservationType=&hotEventType=&studiotag=&isstudio=&__mask__=false&totalCount=95&queryFrom=1'
-        response = requests.post(url=config.CrashRepoUrl, headers={
-            "accept": "application/json, text/plain, */*",
-            "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "content-type": "application/x-www-form-urlencoded",
-            "i18n-locale": "zh_CN",
-            "request-locale": "01",
-            "request-productid": config.Product,
-            "token": config.Token,
-            "x-requested-with": "XMLHttpRequest"
-        }, data=data)
-
-        save_dir = pathlib.Path(self._save_dir)
+        self._query['currentPage'] = page
+        response = query_server(self._query)
         json_data = response.json()
         logger.debug('page #%s', page)
         self._total_page = json_data['data']['totalPage']
-
+        
+        save_dir = pathlib.Path(self._save_dir)
         tasks = []
         for crash_data in json_data['data']['list']:
             task = self._get_zip_task(crash_data, save_dir)
@@ -140,7 +240,7 @@ class AndroidCrashDownloader:
         path = save_dir / (filename + get_config().CrashExt)
 
         if path.exists():
-            logger.warning('text file %s exists, skip', filename)
+            logger.info('text file %s exists, skip', filename)
             return
 
         return (crash_url, path)
@@ -157,7 +257,7 @@ class AndroidCrashDownloader:
         path = save_dir / (filename + '.zip')
 
         if path.exists():
-            logger.warning('zip file %s exists, skip ', filename)
+            logger.info('zip file %s exists, skip ', filename)
             return
 
         return (crash_url, path)
@@ -167,24 +267,101 @@ class AndroidCrashDownloader:
         self.download_page(1)
         for i in range(2, self._total_page+1):
             self.download_page(i)
+            
+
+class AndroidMetaDownloader:
+    '''
+    从crash repo获取所有的crash文件，进行分析
+    platform = 0
+    '''
+
+    def __init__(self, save_dir, query) -> None:
+        self._save_dir = save_dir
+        self._total_page = None
+        self._query = query
+
+    def download_page(self, page):
+        '''download one page'''
+        self._query['currentPage'] = page
+        response = query_server(self._query)
+
+        save_dir = pathlib.Path(self._save_dir)
+        json_data = response.json()
+        logger.debug('page #%s', page)
+        self._total_page = json_data['data']['totalPage']
+
+        for crash_data in json_data['data']['list']:
+            task = self._get_task(crash_data, save_dir)
+            if task is not None:
+                logger.debug('download meta %s', crash_data['crashurl'])
+                with open(task[1], 'w', encoding='utf8') as f:
+                    f.write(json.dumps(crash_data, ensure_ascii=False, indent=4))
+
+    def _get_task(self, crash_data, save_dir):
+        '''下载crashurl的文本'''
+        if crash_data['crashurl'] == '':
+            return
+
+        crash_url = crash_data['crashurl']
+        end_pos = crash_url.rfind('/', 0)
+        start_pos = crash_url.rfind('/', 0, end_pos)
+        filename = crash_url[start_pos+1:end_pos]
+        path = save_dir / (filename + '.meta')
+
+        if path.exists():
+            logger.info('meta file %s exists, skip', filename)
+            return
+
+        return (crash_data, path)
+    
+    def download_all(self):
+        '''下载所有的crash文件'''
+        self.download_page(1)
+        for i in range(2, self._total_page+1):
+            self.download_page(i)
 
 def _do_download_ios(args):
-    downloader = IosCrashDownloader(
-        args.save_dir, args.start_time, args.end_time, args.page_size)
+    print(args)
+    query = create_query()
+    build_query(query, args.start_time, args.end_time, args.game_version, 1)
+    query['pageSize'] = args.page_size
+    downloader = IosCrashDownloader(args.save_dir, query)
     if args.page >= 0:
         downloader.download_page(args.page)
     else:
         downloader.download_all()
 
+
+def _do_download_android_meta(args):
+    query = create_query()
+    build_query(query, args.start_time, args.end_time, args.game_version, 0)
+    query['pageSize'] = args.page_size
+    downloader = AndroidMetaDownloader(args.save_dir, query)
+    if args.page >= 0:
+        downloader.download_page(args.page)
+    else:
+        downloader.download_all()
 
 def _do_download_android(args):
-    downloader = AndroidCrashDownloader(
-        args.save_dir, args.start_time, args.end_time, args.page_size)
+    query = create_query()
+    build_query(query, args.start_time, args.end_time, args.game_version, 0)
+    query['pageSize'] = args.page_size
+    
+    downloader = AndroidCrashDownloader(args.save_dir, query)
     if args.page >= 0:
         downloader.download_page(args.page)
     else:
         downloader.download_all()
 
+def _do_test_query(args):
+    query = create_query()
+    query['pageSize'] = 100
+    query['currentPage'] = 1
+    query['platform'] = 1
+    query['gameVersion'] = '1.1.7'
+    query['startTime'] = '2022-07-21 00:00:00'
+    query['endTime'] = '2022-07-21 23:59:59'
+    print(query_server(query).text)
 
 def _do_parse_args():
     parser = argparse.ArgumentParser()
@@ -196,27 +373,50 @@ def _do_parse_args():
     sub_parser = sub_parsers.add_parser('ios', help='download ios crashes')
     sub_parser.add_argument('save_dir', help='save directory for crash files')
     sub_parser.add_argument('--start_time', help='start time',
-                            default='2022-06-20')
+                            default='')
     sub_parser.add_argument(
-        '--end_time', help='end time', default='2022-06-21')
+        '--end_time', help='end time', default='')
     sub_parser.add_argument(
         '--page', help='page number, if -1 then all pages will be downloaded', default=1, type=int)
     sub_parser.add_argument(
         '--page_size', help='page size', default=100, type=int)
+    sub_parser.add_argument(
+        '--game_version', help='game version', default='')
     sub_parser.set_defaults(func=_do_download_ios)
 
     sub_parser = sub_parsers.add_parser(
         'android', help='download android crashes')
     sub_parser.add_argument('save_dir', help='save directory for crash files')
     sub_parser.add_argument('--start_time', help='start time',
-                            default='2022-06-20')
+                            default='')
     sub_parser.add_argument(
-        '--end_time', help='end time', default='2022-06-21')
+        '--end_time', help='end time', default='')
     sub_parser.add_argument(
         '--page', help='page number, if -1 then all pages will be downloaded', default=1, type=int)
     sub_parser.add_argument(
         '--page_size', help='page size', default=100, type=int)
+    sub_parser.add_argument(
+        '--game_version', help='game version', default='')
     sub_parser.set_defaults(func=_do_download_android)
+    
+    sub_parser = sub_parsers.add_parser(
+        'android_meta', help='download android meta')
+    sub_parser.add_argument('save_dir', help='save directory for meta files')
+    sub_parser.add_argument('--start_time', help='start time',
+                            default='')
+    sub_parser.add_argument(
+        '--end_time', help='end time', default='')
+    sub_parser.add_argument(
+        '--page', help='page number, if -1 then all pages will be downloaded', default=1, type=int)
+    sub_parser.add_argument(
+        '--page_size', help='page size', default=100, type=int)
+    sub_parser.add_argument(
+        '--game_version', help='game version', default='')
+    sub_parser.set_defaults(func=_do_download_android_meta)
+    
+    sub_parser = sub_parsers.add_parser(
+        'query', help='test query')
+    sub_parser.set_defaults(func=_do_test_query)
     
     args = parser.parse_args()
     setup.setup(args.setting_file)

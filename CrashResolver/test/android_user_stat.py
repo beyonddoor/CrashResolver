@@ -1,5 +1,5 @@
 '''
-统计指定时间范围的crash分类
+按照用户来统计crash
 '''
 
 import re
@@ -10,4 +10,4 @@ records = load('db_android.csv')
 pattern = re.compile("'2022-07-[15|16|17|18|19|20].*")
 lists = list(record for record in records if pattern.match(
     record['Start time']))
-main.group_detail(lists, lambda x: x['stack_key'], 'stack_key')
+main.group_detail(lists, lambda x: x['userId'], 'userId', 5)
