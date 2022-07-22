@@ -68,4 +68,3 @@ def dump_to_txt(filename: str, dict_list: list[dict]):
             file.write(str(item))
             file.write('\n')
             
-            

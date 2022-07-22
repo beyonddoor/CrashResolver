@@ -5,34 +5,48 @@ import sys
 from time import time
 from itertools import groupby
 import operator
+from pathlib import Path
+import subprocess
 
 from CrashResolver import database_csv
 from . import crash_parser
 from .. import setup
-from . import symbolicator
-from .. import reporter
 from .. import util
 from ..util import group_count, group_detail
+from ..config import get_config
 
-# def _do_save_csv_ios(args):
-#     reasons = []
-#     with open(args.reason_file, 'r', encoding='utf8') as file:
-#         reasons = [line.strip()
-#                    for line in file.read().split('\n') if line.strip() != '']
+def get_os_version(crash):
+    '''codetype和版本组成的更有区分性的信息'''
+    arm64e = '(arm64e)' if crash['is_arm64e'] else ''
+    os_version = crash['Code Type'] + arm64e + ":" + crash['OS Version']
+    return os_version
+    
+def symbolicate(filename, crash_dir)->dict:
+    '''符号化，返回符号化之后的dict'''
+    crash_fullpath = Path(crash_dir) / filename
+    subprocess.run(['bash', get_config().SymbolicatePath, crash_fullpath], check=False)
+    return crash_parser.read_crash(crash_fullpath.with_suffix(get_config().SymbolExt))
 
-#     parser = crash_parser.IosCrashParser(False)
-#     report = reporter.CrashReport(symbolicator.Symbolicator(
-#         symbolicator.symbolicate,
-#         lambda crash: symbolicator.parse_reason(crash, reasons),
-#         parser),
-#         parser
-#     )
+def symbolicate_groups(crash_groups, do_symbolicate):
+    '''符号化分组的crash'''
+    for group in crash_groups:
+        first_crash = group[1][0]
+        final_crash = do_symbolicate(first_crash['filename'])
+        for crash in group[1]:
+            crash['symbol_stacks'] = final_crash['stacks']
 
-#     classified_crashes = report.get_symbolicated_crashes(args.crash_dir)
-#     crash_list = []
-#     for v in classified_crashes:
-#         crash_list.extend(v[1])
-#     crash_parser.save_crashes_to_csv_file(crash_list, args.out_file)
+def _do_symbolicate(args):
+    '''符号化，保存结果到db'''
+    dict_list = database_csv.load(args.db_file)
+    def key(crash):
+        return crash['stack_key']
+        
+    dict_list.sort(key=key, reverse=True)
+    group_obj = groupby(dict_list, key)
+    groups = [(key, list(lists)) for (key, lists) in group_obj]
+    groups.sort(key=lambda x: len(x[1]), reverse=True)
+    symbolicate_groups(groups, lambda filename: symbolicate(filename, args.crash_dir))
+    database_csv.save(args.db_file, dict_list)
 
 
 def _do_update_os_names(args):
@@ -46,11 +60,6 @@ def _do_update_os_names(args):
     database_csv.save(args.db_file, crash_list)
 
 
-def _do_update_symbol(args):
-    # TODO 将符号化集成进来
-    pass
-
-
 def _do_save_csv(args):
     '''save csv'''
     crash_list = crash_parser.IosCrashParser(
@@ -62,42 +71,11 @@ def _do_group_by_stack_key(args):
     crash_list = database_csv.load(args.db_file)
     group_detail(crash_list, lambda crash: crash['stack_key'], 'stack_key', 100)
 
-def get_os_version(crash):
-    ''''''
-    arm64e = '(arm64e)' if crash['is_arm64e'] else ''
-    os_version = crash['Code Type'] + arm64e + ":" + crash['OS Version']
-    return os_version
 
 def _do_stat_os(args):
     '''统计os'''
     crash_list = database_csv.load(args.db_file)
     group_detail(crash_list, get_os_version, 'os version', 10)
-
-
-def _do_report(args):
-    crash_dir = args.crash_dir
-    output_file = args.output_file
-    reasons = []
-    with open(args.reason_file, 'r', encoding='utf8') as file:
-        reasons = [line.strip()
-                   for line in file.read().split('\n') if line.strip() != '']
-
-    parser = crash_parser.IosCrashParser(False)
-
-    report = reporter.CrashReport(symbolicator.Symbolicator(
-        symbolicator.symbolicate,
-        lambda crash: symbolicator.parse_reason(crash, reasons),
-        parser),
-        parser)
-    report.generate_report(crash_dir, output_file)
-
-
-def _do_test(args):
-    pass
-    # _do_list_unkown_reason(args)
-    # _do_stat_reasons(args)
-    # _do_list_unkown_reason_logs(args)
-
 
 def _do_parse_args():
     parser = argparse.ArgumentParser()
@@ -122,17 +100,18 @@ def _do_parse_args():
         'stat_os', help='statistics crashed iOS platforms')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.set_defaults(func=_do_stat_os)
+    
+    sub_parser = sub_parsers.add_parser(
+        'update_os', help='update "os_symbol_ready" field')
+    sub_parser.add_argument('db_file', help='csv database file')
+    sub_parser.add_argument('os_file', help='os file')
+    sub_parser.set_defaults(func=_do_update_os_names)
 
-    sub_parser = sub_parsers.add_parser('report', help='generate a report')
+    sub_parser = sub_parsers.add_parser('symbolicate', help='symbolicate all crashes in csv')
+    sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.add_argument('crash_dir', help='clash report dir')
-    sub_parser.add_argument('reason_file', help='reason file')
-    sub_parser.add_argument('output_file', help='output report file')
-    sub_parser.set_defaults(func=_do_report)
-
-    sub_parser = sub_parsers.add_parser('test', help='test only')
-    sub_parser.add_argument('arg1', help='arg1')
-    sub_parser.set_defaults(func=_do_test)
-
+    sub_parser.set_defaults(func=_do_symbolicate)
+    
     args = parser.parse_args()
     setup.setup(args.setting_file)
     args.func(args)

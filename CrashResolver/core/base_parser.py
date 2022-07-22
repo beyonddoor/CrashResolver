@@ -1,6 +1,8 @@
+from abc import abstractmethod
 from asyncio.log import logger
 import logging
 import os
+
 from pathlib import Path
 
 from ..config import get_config
@@ -12,8 +14,11 @@ class ParseError(Exception):
 
 
 class BaseCrashParser:
+    '''解析crash的base class'''
+    
+    @abstractmethod
     def parse_crash(self, text: str) -> dict:
-        raise NotImplementedError()
+        '''解析crash'''
 
     def read_crash(self, filename: str) -> dict:
         '''从文件中提取crash'''
