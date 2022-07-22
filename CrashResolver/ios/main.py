@@ -1,13 +1,12 @@
 '''提供一些命令行功能'''
 
 import argparse
-from asyncio.log import logger
 import sys
 from time import time
 from itertools import groupby
-import operator
 from pathlib import Path
 import subprocess
+import logging
 
 from CrashResolver import database_csv
 from . import crash_parser
@@ -15,6 +14,8 @@ from .. import setup
 from .. import util
 from ..util import group_count, group_detail
 from ..config import get_config
+
+logger = logging.getLogger(__name__)
 
 def get_os_version(crash):
     '''codetype和版本组成的更有区分性的信息'''
@@ -27,7 +28,7 @@ def symbolicate(filename, crash_dir)->dict:
     crash_fullpath = Path(crash_dir) / filename
     sym_path = crash_fullpath.with_suffix(get_config().SymbolExt)
     if not sym_path.exists():
-        logger.info("processing %s", crash_fullpath)
+        logger.info('symbolicate %s', filename)
         subprocess.run(['bash', get_config().SymbolicatePath, crash_fullpath], check=False)
     return crash_parser.IosCrashParser(False).read_crash(sym_path)
 
@@ -37,7 +38,7 @@ def symbolicate_groups(crash_groups, do_symbolicate):
         first_crash = group[1][0]
         final_crash = do_symbolicate(first_crash['filename'])
         for crash in group[1]:
-            crash['symbol_stacks'] = final_crash['stacks']
+            crash['symbol_stacks'] = '\n'.join(final_crash['stacks'])
 
 def _do_symbolicate(args):
     '''符号化，保存结果到db'''
@@ -56,10 +57,27 @@ def _do_symbolicate(args):
 def _do_update_os_names(args):
     crash_list = database_csv.load(args.db_file)
     os_names = set(util.read_lines(args.os_file))
-
+    
     for crash in crash_list:
         crash['os_symbol_ready'] = util.is_os_available(
             crash, os_names)
+
+    database_csv.save(args.db_file, crash_list)
+    
+def _do_update_reason(args):
+    '''标记crash原因'''
+    crash_list = database_csv.load(args.db_file)
+    reasons = [reason.split(' ', maxsplit=1) for reason in util.read_lines(args.reason_file)]
+    for crash in crash_list:
+        for reason in reasons:
+            if reason[1] in crash['symbol_stacks']:
+                crash['reason1'] = reason[0]
+                crash['reason2'] = reason[1]
+                break
+        
+        if 'reason1' not in crash:
+            crash['reason1'] = 'unknown'
+            crash['reason2'] = 'unknown'
 
     database_csv.save(args.db_file, crash_list)
 
@@ -71,9 +89,16 @@ def _do_save_csv(args):
     database_csv.save(args.out_file, crash_list)
 
 
-def _do_group_by_stack_key(args):
+def _do_groupby_key(args):
+    '''根据key分类'''
     crash_list = database_csv.load(args.db_file)
-    group_detail(crash_list, lambda crash: crash['stack_key'], 'stack_key', 100)
+    group_detail(crash_list, lambda crash: crash[args.key_name], args.key_name,  args.limit)
+
+
+def _do_list_fields(args):
+    '''显示字段'''
+    crash_list = database_csv.load(args.db_file)
+    print(crash_list[0].keys())
 
 
 def _do_stat_os(args):
@@ -96,9 +121,11 @@ def _do_parse_args():
     sub_parser.set_defaults(func=_do_save_csv)
 
     sub_parser = sub_parsers.add_parser(
-        'classify', help='classify crashes by stack fingerprint')
+        'groupby', help='group crashes by key')
     sub_parser.add_argument('db_file', help='csv database file')
-    sub_parser.set_defaults(func=_do_group_by_stack_key)
+    sub_parser.add_argument('--key_name', help='keyname', default='stack_key')
+    sub_parser.add_argument('--limit', help='limit', default=100, type=int)
+    sub_parser.set_defaults(func=_do_groupby_key)
 
     sub_parser = sub_parsers.add_parser(
         'stat_os', help='statistics crashed iOS platforms')
@@ -115,6 +142,15 @@ def _do_parse_args():
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.add_argument('crash_dir', help='clash report dir')
     sub_parser.set_defaults(func=_do_symbolicate)
+    
+    sub_parser = sub_parsers.add_parser('reason', help='update crash reason')
+    sub_parser.add_argument('db_file', help='csv database file')
+    sub_parser.add_argument('reason_file', help='reason file')
+    sub_parser.set_defaults(func=_do_update_reason)
+    
+    sub_parser = sub_parsers.add_parser('fields', help='list fields')
+    sub_parser.add_argument('db_file', help='csv database file')
+    sub_parser.set_defaults(func=_do_list_fields)
     
     args = parser.parse_args()
     setup.setup(args.setting_file)
