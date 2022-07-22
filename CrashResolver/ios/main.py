@@ -1,6 +1,7 @@
 '''提供一些命令行功能'''
 
 import argparse
+from asyncio.log import logger
 import sys
 from time import time
 from itertools import groupby
@@ -24,8 +25,11 @@ def get_os_version(crash):
 def symbolicate(filename, crash_dir)->dict:
     '''符号化，返回符号化之后的dict'''
     crash_fullpath = Path(crash_dir) / filename
-    subprocess.run(['bash', get_config().SymbolicatePath, crash_fullpath], check=False)
-    return crash_parser.read_crash(crash_fullpath.with_suffix(get_config().SymbolExt))
+    sym_path = crash_fullpath.with_suffix(get_config().SymbolExt)
+    if not sym_path.exists():
+        logger.info("processing %s", crash_fullpath)
+        subprocess.run(['bash', get_config().SymbolicatePath, crash_fullpath], check=False)
+    return crash_parser.IosCrashParser(False).read_crash(sym_path)
 
 def symbolicate_groups(crash_groups, do_symbolicate):
     '''符号化分组的crash'''
