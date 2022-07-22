@@ -5,7 +5,7 @@
 from enum import Enum
 import re
 
-from ..core.base_parser import BaseCrashParser
+from ..base_parser import BaseCrashParser
 
 
 class IosParseState(Enum):

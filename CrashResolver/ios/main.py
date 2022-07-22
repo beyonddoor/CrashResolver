@@ -17,6 +17,10 @@ from ..config import get_config
 
 logger = logging.getLogger(__name__)
 
+class SymbolicateError(Exception):
+    def __init__(self, message):
+        self.message = message
+
 def get_os_version(crash):
     '''codetype和版本组成的更有区分性的信息'''
     arm64e = '(arm64e)' if crash['is_arm64e'] else ''
@@ -30,15 +34,22 @@ def symbolicate(filename, crash_dir)->dict:
     if not sym_path.exists():
         logger.info('symbolicate %s', filename)
         subprocess.run(['bash', get_config().SymbolicatePath, crash_fullpath], check=False)
+        if not sym_path.exists():
+            raise SymbolicateError(f'symbolicate failed {filename}')
     return crash_parser.IosCrashParser(False).read_crash(sym_path)
 
 def symbolicate_groups(crash_groups, do_symbolicate):
     '''符号化分组的crash'''
     for group in crash_groups:
         first_crash = group[1][0]
-        final_crash = do_symbolicate(first_crash['filename'])
+        final_crash = None
+        try:
+            final_crash = do_symbolicate(first_crash['filename'])
+        except SymbolicateError as err:
+            logger.exception('symbolicate %s failed: %s', first_crash['filename'], err, stack_info=False)
         for crash in group[1]:
-            crash['symbol_stacks'] = '\n'.join(final_crash['stacks'])
+            crash['symbol_stacks'] = '\n'.join(final_crash['stacks']) if final_crash else ''
+            
 
 def _do_symbolicate(args):
     '''符号化，保存结果到db'''
@@ -67,17 +78,19 @@ def _do_update_os_names(args):
 def _do_update_reason(args):
     '''标记crash原因'''
     crash_list = database_csv.load(args.db_file)
-    reasons = [reason.split(' ', maxsplit=1) for reason in util.read_lines(args.reason_file)]
+    reasons = [reason.strip().split(' ', maxsplit=1) for reason in util.read_lines(args.reason_file)]
     for crash in crash_list:
+        crash['reason1'] = 'unknown'
+        crash['reason2'] = 'unknown'
         for reason in reasons:
             if reason[1] in crash['symbol_stacks']:
                 crash['reason1'] = reason[0]
                 crash['reason2'] = reason[1]
                 break
-        
-        if 'reason1' not in crash:
-            crash['reason1'] = 'unknown'
-            crash['reason2'] = 'unknown'
+
+        if crash['reason2'] == 'unknown':
+            print(crash['symbol_stacks'])
+
 
     database_csv.save(args.db_file, crash_list)
 

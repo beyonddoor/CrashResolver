@@ -5,7 +5,7 @@ import os
 
 from pathlib import Path
 
-from ..config import get_config
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
