@@ -127,6 +127,3 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-CrashResolver/fetch_crash.py
-
-CrashResolver/assets/
