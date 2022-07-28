@@ -67,7 +67,7 @@ class IosCrashParser(BaseCrashParser):
 
         return frameworks
 
-    def parse_crash(self, text: str) -> dict:
+    def parse_crash(self, text: str, filename) -> dict:
         '''从文本解析crash信息，保存结果为字典'''
         stacks = []
         crash = {}
@@ -108,7 +108,7 @@ class IosCrashParser(BaseCrashParser):
                             'offset': match.groups()[0]
                         }
 
-        crash['stacks'] = stacks
+        crash['stacks'] = '\n'.join(stacks)
         crash['is_arm64e'] = text.find('CoreFoundation arm64e') >= 0
         crash['stack_key'] = IosCrashParser.stack_fingerprint(
             stacks, self._is_rough)

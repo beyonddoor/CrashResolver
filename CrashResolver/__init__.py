@@ -9,8 +9,8 @@ This tool need a setting file to configure it, the format as following:
 LogConfigFile = log.yaml
 CrashExt = .txt
 SymbolExt = .sym
-SymbolicatePath = ./symbolicate.sh
-CrashRepoUrl = <the url to fetch crashes>
+IosSymbolicateArgs = ./symbolicate.sh
+IosCrashRepoUrl = <the url to fetch crashes>
 ```
 
 ```sh

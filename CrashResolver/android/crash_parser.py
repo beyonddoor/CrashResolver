@@ -2,13 +2,24 @@
 解析ios和android的crash文件，结构化为一个dict
 '''
 
+from asyncio.log import logger
 from enum import Enum
 from pathlib import Path
 import os
 import re
 import csv
+import logging
 
-from ..core.base_parser import BaseCrashParser
+from ..base_parser import BaseCrashParser
+
+logger = logging.getLogger(__name__)
+
+PAT_SO = re.compile('.*/lib/([^/]+)/\w+\.so', re.MULTILINE | re.DOTALL)
+'''提取abi'''
+
+
+PAT_BLOCK_HEADER = re.compile('^(\w[^:]+):$')
+'''提取块名'''
 
 
 class AndroidParseState(Enum):
@@ -16,12 +27,21 @@ class AndroidParseState(Enum):
     INIT = 0
     HEADER = 1
     '''解析header'''
-    REASON = 2
+    SIGNAL = 2
     '''解析原因'''
     BACKTRACE = 3
     '''解析crash堆栈'''
     LOG = 4
     '''解析日志'''
+    BLOCK = 5
+    '''解析块，每行为"Xxx:"是特征 '''
+
+
+def get_abi_name(stacks):
+    '''提取abi'''
+    pattern = PAT_SO.match(stacks)
+    if pattern:
+        return pattern.groups()[0]
 
 
 class TumbstoneParser(BaseCrashParser):
@@ -58,8 +78,9 @@ class TumbstoneParser(BaseCrashParser):
 
         return '\n'.join(lines)
 
-    def parse_crash(self, text: str) -> dict:
+    def parse_crash(self, text: str, filename) -> dict:
         '''从文本解析crash信息，保存结果为字典'''
+        # logger.info('parse_crash %s', filename)
         stacks = []
         reason_lines = []
         crash = {}
@@ -71,6 +92,7 @@ class TumbstoneParser(BaseCrashParser):
             if state == AndroidParseState.INIT:
                 if line.startswith("***"):
                     state = AndroidParseState.HEADER
+
             elif state == AndroidParseState.HEADER:
                 if line.startswith("**"):
                     continue
@@ -85,40 +107,39 @@ class TumbstoneParser(BaseCrashParser):
                         crash['crash_tid'] = match.groups()[1]
                         log_line_pattern = re.compile(
                             f"[0-9]+.* {crash['crash_pid']} +{crash['crash_tid']} .*")
-                        log_line = f" {crash['crash_pid']} {crash['crash_tid']} " if int(
-                            crash['crash_tid']) >= 10000 else f" {crash['crash_pid']}  {crash['crash_tid']} "
 
-                    state = AndroidParseState.REASON
+                    state = AndroidParseState.BLOCK
 
-                    if not lines[index + 1].startswith('signal ') or not lines[index + 2].startswith('    '):
-                        # 没有traceback，提取log
+            elif state == AndroidParseState.BLOCK:
+                block_match = PAT_BLOCK_HEADER.match(line)
+                if block_match:
+                    name = block_match.groups()[0]
+                    # logger.debug('block name %s', name)
+
+                    if 'backtrace' == name:
+                        state = AndroidParseState.BACKTRACE
+                    elif 'logcat' == name:
                         state = AndroidParseState.LOG
-
-            elif state == AndroidParseState.REASON:
-                # TODO 解析reason
-                if line == '':
-                    state = AndroidParseState.BACKTRACE
-                else:
-                    reason_lines.append(line)
 
             elif state == AndroidParseState.BACKTRACE:
                 if line == '':
-                    state = AndroidParseState.LOG
+                    state = AndroidParseState.BLOCK
                 else:
                     stacks.append(line)
 
             elif state == AndroidParseState.LOG:
-                if log_line_pattern is None:
-                    break
-                if len(line) > 0 and line[0] >= '0' and line[0] <= '9' and re.match(log_line_pattern, line) is not None:
+                if len(line) > 0 and line[0] >= '0' and line[0] <= '9' and log_line_pattern.match(line) is not None:
                     logs.append(line)
-                # if log_line is None:
-                #     break
-                # if len(line)>0 and line[0]>='0' and line[0]<='9' and log_line in line:
-                #     logs.append(line)
+                if line == '':
+                    state = AndroidParseState.BLOCK
 
-        crash['stacks'] = stacks
+        crash['stacks'] = '\n'.join(stacks)
         crash['thread_logs'] = '\n'.join(logs)
+        crash['abi_name'] = get_abi_name(crash['stacks'])
+        # logger.info('abi_name %s %s', filename, crash['abi_name'])
+        if not crash['abi_name']:
+            logger.error('abi_name not found for %s', filename)
+            # logger.debug(crash['stacks'])
 
         if len(stacks) == 0:
             crash['reason'] = 'NO_BACKTRACE'
@@ -135,4 +156,3 @@ def _parse_header(headers: dict, text: str):
         return
     arr = text.split(':', maxsplit=1)
     headers[arr[0]] = arr[1].strip()
-

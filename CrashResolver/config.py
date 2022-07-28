@@ -4,15 +4,17 @@ import configparser
 import logging
 
 from collections import namedtuple
-_Config = namedtuple('Config', ['LogConfigFile', 'CrashExt', 'SymbolExt', 'SymbolicatePath', 'CrashRepoUrl', 'AndroidCrashRepoUrl', 'Token', 'Product', 'ProductId'],
-                     defaults=[''])
+_Config = namedtuple('Config', ['LogConfigFile', 'CrashExt', 'SymbolExt', 'IosSymbolicateArgs', 'IosCrashRepoUrl', 'AndroidCrashRepoUrl', 'Token', 'Product', 'ProductId',
+                                'AndroidSymbolicateArgs'], defaults=[''])
 
-_configVal = _Config('', '.txt', '.sym', '', '', '', '', '', '')
+_configVal = _Config('', '.txt', '.sym', '', '', '', '', '', '', '')
 logger = logging.getLogger(__name__)
+
 
 def get_config() -> _Config:
     '''get config'''
     return _configVal
+
 
 def parse_config(filename):
     '''parse config'''
@@ -26,13 +28,14 @@ def parse_config(filename):
         values = {
             'CrashExt': section.get('CrashExt', '.txt'),
             'SymbolExt': section.get('SymbolExt', '.sym'),
-            'SymbolicatePath': section.get('SymbolicatePath', '.sym'),
-            'CrashRepoUrl': section.get('CrashRepoUrl', ''),
+            'IosSymbolicateArgs': section.get('IosSymbolicateArgs', ''),
+            'IosCrashRepoUrl': section.get('IosCrashRepoUrl', ''),
             'AndroidCrashRepoUrl': section.get('AndroidCrashRepoUrl', ''),
             'LogConfigFile': section.get('LogConfigFile', 'log.yaml'),
             'Product': section.get('Product', ''),
             'ProductId': section.get('ProductId', ''),
             'Token': section.get('Token', ''),
+            'AndroidSymbolicateArgs': section.get('AndroidSymbolicateArgs', ''),
         }
 
         global _configVal
@@ -48,10 +51,11 @@ def write_config(filename):
         config = configparser.ConfigParser()
         config['CrashExt'] = _configVal.CrashExt
         config['SymbolExt'] = _configVal.SymbolExt
-        config['SymbolicatePath'] = _configVal.SymbolicatePath
-        config['CrashRepoUrl'] = _configVal.CrashRepoUrl
+        config['IosSymbolicateArgs'] = _configVal.IosSymbolicateArgs
+        config['IosCrashRepoUrl'] = _configVal.IosCrashRepoUrl
         config['AndroidCrashRepoUrl'] = _configVal.AndroidCrashRepoUrl
         config['Token'] = _configVal.Token
         config['Product'] = _configVal.Product
         config['ProductId'] = _configVal.ProductId
+        config['AndroidSymbolicateArgs'] = _configVal.AndroidSymbolicateArgs
         config.write(file)

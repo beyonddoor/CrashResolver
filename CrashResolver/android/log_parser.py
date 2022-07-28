@@ -4,7 +4,7 @@ from asyncio.log import logger
 import enum
 import re
 
-from ..core.base_parser import BaseCrashParser
+from ..base_parser import BaseCrashParser
 
 
 PAT_TUMBSTONE = '*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***'
@@ -88,7 +88,7 @@ class CrashLogParser(BaseCrashParser):
 
         return '\n'.join(lines)
 
-    def parse_crash(self, text: str) -> dict:
+    def parse_crash(self, text: str, filename) -> dict:
         '''从文本解析crash信息，保存结果为字典'''
         stacks = []
         reason_lines = []
@@ -123,7 +123,7 @@ class CrashLogParser(BaseCrashParser):
                 else:
                     stacks.append(line)
 
-        crash['stacks'] = stacks
+        crash['stacks'] = '\n'.join(stacks)
         crash['thread_logs'] = 'NO NEED'
         crash['full_text'] = text
 

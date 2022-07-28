@@ -1,6 +1,7 @@
 '''提供一些命令行功能'''
 
 import argparse
+from subprocess import PIPE, STDOUT
 import json
 from pathlib import Path
 import sys
@@ -8,8 +9,12 @@ from time import time
 from itertools import groupby
 import pprint
 import os
+import logging
+import subprocess
+from concurrent import futures
 
 
+from ..config import get_config
 from CrashResolver import database_csv
 from . import crash_parser
 from .. import setup
@@ -17,33 +22,35 @@ from .. import util
 from . import log_parser
 from ..util import group_count, group_detail
 
-
-def update_reason_log(crash: dict, reasons: list):
-    '''从log的特征归类，赋值reason_log'''
-    if crash['thread_logs'] == '':
-        crash['reason_log'] = 'empty'
-        return
-
-    for reason in reasons:
-        if reason in crash['thread_logs']:
-            crash['reason_log'] = reason
-            return
-    crash['reason_log'] = 'unknown'
+logger = logging.getLogger(__name__)
 
 
-def _update_reason_log_all(args):
+class SymbolicateError(Exception):
+    '''符号化失败'''
+
+
+def _tag_thread_logs(args):
+    '''给thread log分类'''
     crash_list = database_csv.load(args.db_file)
-    reasons = util.read_lines(args.reason_file)
+    tag_list = util.read_tag_file(args.reason_file)
+    util.update_tag(crash_list, tag_list,
+                    lambda crash: crash['thread_logs'], 'log')
+    database_csv.save(args.db_file, crash_list)
 
-    for crash in crash_list:
-        update_reason_log(crash, reasons)
 
+def _tag_symbol_stacks(args):
+    '''给symbol_stacks分类'''
+    crash_list = database_csv.load(args.db_file)
+    tag_list = util.read_tag_file(args.reason_file)
+    util.update_tag(crash_list, tag_list,
+                    lambda crash: crash['symbol_stacks'])
     database_csv.save(args.db_file, crash_list)
 
 
 def _query_app_version(args):
     '''查询appid和版本的统计'''
     crash_list = database_csv.load(args.db_file)
+
     def key_func(
         x): return f'{x.get("App ID", "unknown")}-{x.get("App version", "unknown")}'
     crash_list.sort(key=key_func)
@@ -53,51 +60,82 @@ def _query_app_version(args):
     pprint.pprint(result_list)
 
 
+def _parse(args):
+    out = crash_parser.TumbstoneParser().read_crash(args.crash_file)
+    pprint.pprint(out)
+
+
 def _create_db(args):
     '''创建db'''
     crash_list = crash_parser.TumbstoneParser().read_crash_list(args.crash_dir)
 
     for crash in crash_list:
         if _is_bad(crash):
-            print(f' bad {str(crash)}')
+            logger.error('bad crash %s', str(crash))
 
     crash_list = [crash for crash in crash_list if not _is_bad(crash)]
-    headers = ['Tombstone maker', 'Crash type', 'Start time', 'Crash time', 'App ID', 'App version', 'Rooted', 'API level', 'OS version', 'Kernel version',
-               'ABI list', 'Manufacturer', 'Brand', 'Model', 'Build fingerprint', 'ABI', 'stacks', 'thread_logs', 'reason', 'stack_key', 'filename']
-    database_csv.save(args.db_file, crash_list, headers)
+    # headers = ['Tombstone maker', 'Crash type', 'Start time', 'Crash time', 'App ID', 'App version', 'Rooted', 'API level', 'OS version', 'Kernel version',
+    #            'ABI list', 'Manufacturer', 'Brand', 'Model', 'Build fingerprint', 'ABI', 'stacks', 'thread_logs', 'reason', 'stack_key', 'filename']
+    database_csv.save(args.db_file, crash_list)
 
 
 def _remove_bad(args):
     crash_list = database_csv.load(args.db_file)
     for crash in crash_list:
         if _is_bad(crash):
-            print(f' bad {str(crash)}')
+            logger.error('bad crash %s', str(crash))
 
     crash_list = [crash for crash in crash_list if not _is_bad(crash)]
     database_csv.save(args.db_file, crash_list)
 
 
-def update_meta(crash_list, meta_dir):
-    '''更新meta信息'''
-    meta_dir_obj = Path(meta_dir)
-    for crash in crash_list:
-        meta_filename = meta_dir_obj / (Path(crash['filename']).stem + '.meta')
-        json_content = None
-        if meta_filename.exists():
-            with open(meta_filename, 'r', encoding='utf8') as f:
-                json_content = json.load(f)
-        if json_content:
-            crash['roleId'] = json_content.get('roleId', 'unkown')
-            crash['userId'] = json_content.get('userId', 'unkown')
-        else:
-            crash['roleId'] = 'unkown'
-            crash['userId'] = 'unkown'
-
-
 def _update_meta(args):
     crash_list = database_csv.load(args.db_file)
-    update_meta(crash_list, args.meta_dir)
+    util.update_meta(crash_list, args.meta_dir)
     database_csv.save(args.db_file, crash_list)
+
+
+def symbolicate(abi_name, filename) -> dict:
+    '''符号化，返回符号化之后的dict'''
+    fullpath = Path(filename)
+    logger.info('symbolicate %s', fullpath)
+    args = get_config().AndroidSymbolicateArgs.split(',')
+    args.extend([abi_name,fullpath])
+    sp = subprocess.Popen(args, shell=False, stderr=STDOUT, close_fds=True, stdin=PIPE, stdout=PIPE)
+    return sp.stdout.read().decode('utf8')
+
+def symbolicate_groups(crash_groups, symbolicate_func):
+    '''符号化分组的crash'''
+
+    def symbolicate_group(group):
+        first_crash = group[1][0]
+        symbol_str = None
+        try:
+            symbol_str = symbolicate_func(first_crash)
+        except SymbolicateError as err:
+            logger.exception('symbolicate %s failed: %s',
+                             first_crash['filename'], err, stack_info=False)
+        for crash in group[1]:
+            crash['symbol_stacks'] = symbol_str
+
+    executor = futures.ThreadPoolExecutor(max_workers=5)
+    results = executor.map(symbolicate_group, crash_groups)
+    for result in results:
+        pass
+
+
+def _do_symbolicate(args):
+    dict_list = database_csv.load(args.db_file)
+
+    def key(crash):
+        return crash['stack_key']
+
+    dict_list.sort(key=key, reverse=True)
+    group_obj = groupby(dict_list, key)
+    groups = [(key, list(lists)) for (key, lists) in group_obj]
+    groups.sort(key=lambda x: len(x[1]), reverse=True)
+    symbolicate_groups(groups, lambda crash: symbolicate(crash['abi_name'], Path(args.crash_dir) / crash['filename']))
+    database_csv.save(args.db_file, dict_list)
 
 
 def _is_bad(crash):
@@ -120,13 +158,6 @@ def _is_bad(crash):
 #             print(f'{crash["filename"]}\n')
 #             print(f'{crash["thread_logs"]}\n')
 
-def _do_test(args):
-    # _do_list_unkown_reason(args)
-    # _query_reason_log_stat(args)
-    # _do_list_unkown_reason_logs(args)
-    pass
-
-
 def read_crashes(log_file, to_parse: bool):
     '''从log文件中读取crash'''
     parser = log_parser.CrashLogParser()
@@ -135,7 +166,7 @@ def read_crashes(log_file, to_parse: bool):
         logs = log_parser.parse_tumbstone_from_log(file.read())
         for log in logs:
             if to_parse:
-                result.append(parser.parse_crash(log))
+                result.append(parser.parse_crash(log, log_file))
             else:
                 result.append(log)
     return result
@@ -168,18 +199,24 @@ def _create_logdb(args):
     database_csv.save(args.db_file, crash_list, headers)
 
 
-def _group_by(args):
+def _groupby(args):
     crash_list = database_csv.load(args.db_file)
     if args.count_only:
-        group_count(crash_list, lambda x: x.get(args.column_name, 'unkown'), args.column_name)
+        group_count(crash_list, lambda x: x.get(
+            args.key_name, 'unkown'), args.key_name)
     else:
-        group_detail(crash_list, lambda x: x.get(args.column_name, 'unkown'), args.column_name)
+        group_detail(crash_list, lambda x: x.get(
+            args.key_name, 'unkown'), args.key_name, args.limit)
 
 
 def _show_columns(args):
     crash_list = database_csv.load(args.db_file)
     pprint.pprint(crash_list[0].keys())
     pprint.pprint(crash_list[0].values())
+
+
+def _test(args):
+    pass
 
 
 def _do_parse_args():
@@ -190,16 +227,27 @@ def _do_parse_args():
     sub_parsers = parser.add_subparsers()
 
     sub_parser = sub_parsers.add_parser(
+        'parse', help='parse a single crash file')
+    sub_parser.add_argument('crash_file', help='clash file')
+    sub_parser.set_defaults(func=_parse)
+
+    sub_parser = sub_parsers.add_parser(
         'save_csv', help='save android crashes to csv files')
     sub_parser.add_argument('crash_dir', help='clashes dir')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.set_defaults(func=_create_db)
 
     sub_parser = sub_parsers.add_parser(
-        'update_reason_android', help='update android cause reason')
+        'reason_log', help='update cause reason by thread logs')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.add_argument('reason_file', help='reason file')
-    sub_parser.set_defaults(func=_update_reason_log_all)
+    sub_parser.set_defaults(func=_tag_thread_logs)
+
+    sub_parser = sub_parsers.add_parser(
+        'reason', help='update cause reason by symbol stacks')
+    sub_parser.add_argument('db_file', help='csv database file')
+    sub_parser.add_argument('reason_file', help='reason file')
+    sub_parser.set_defaults(func=_tag_symbol_stacks)
 
     sub_parser = sub_parsers.add_parser(
         'remove_bad', help='remove bad records')
@@ -219,26 +267,33 @@ def _do_parse_args():
         '--to_parse', help='will parse or not', dest='to_parse', action='store_false')
     sub_parser.set_defaults(func=_create_logdb)
 
-    sub_parser = sub_parsers.add_parser('group_by')
+    sub_parser = sub_parsers.add_parser('groupby')
     sub_parser.add_argument('db_file', help='csv database file')
-    sub_parser.add_argument('column_name', help='column name')
+    sub_parser.add_argument('--key_name', help='key name', default='stack_key')
+    sub_parser.add_argument('--limit', help='limit', default=100, type=int)
     sub_parser.add_argument(
-        '--count_only', help='count only', action='store_false')
-    sub_parser.set_defaults(func=_group_by)
+        '--count_only', help='count only', action='store_true')
+    sub_parser.set_defaults(func=_groupby)
 
     sub_parser = sub_parsers.add_parser('columns', help='show columns')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.set_defaults(func=_show_columns)
+
+    sub_parser = sub_parsers.add_parser('test', help='test')
+    sub_parser.set_defaults(func=_test)
 
     sub_parser = sub_parsers.add_parser('update_meta', help='update meta')
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.add_argument('meta_dir', help='meta dir')
     sub_parser.set_defaults(func=_update_meta)
 
-    sub_parser = sub_parsers.add_parser('test', help='test only')
-    sub_parser.add_argument('arg1', help='arg1')
-    sub_parser.add_argument('--arg2', help='arg2')
-    sub_parser.set_defaults(func=_do_test)
+    sub_parser = sub_parsers.add_parser(
+        'symbolicate', help='symbolicate all crashes in csv')
+    sub_parser.add_argument(
+        '--strict', help='is stack strict match', action='store_false')
+    sub_parser.add_argument('db_file', help='csv database file')
+    sub_parser.add_argument('crash_dir', help='clash report dir')
+    sub_parser.set_defaults(func=_do_symbolicate)
 
     args = parser.parse_args()
     setup.setup(args.setting_file)

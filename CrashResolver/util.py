@@ -1,6 +1,8 @@
 '''公用的一些util'''
 
 from itertools import groupby
+import json
+from pathlib import Path
 
 def group_count(item_list, key, key_name):
     '''根据key进行分类'''
@@ -17,7 +19,7 @@ def group_count(item_list, key, key_name):
     print('\n')
 
     for lists in groups:
-        print(f'{lists[1]}/{lists[1]/total:0.2}\t{lists[0]}')
+        print(f'{lists[1]}/{(lists[1]/total*100):2.2f}%\t{lists[0]}')
 
 
 def group_detail(dict_list: list[dict], key, key_name, head=10):
@@ -68,3 +70,43 @@ def dump_to_txt(filename: str, dict_list: list[dict]):
             file.write(str(item))
             file.write('\n')
             
+def update_meta(crash_list, meta_dir):
+    '''更新meta信息'''
+    meta_dir_obj = Path(meta_dir)
+    for crash in crash_list:
+        meta_filename = meta_dir_obj / (Path(crash['filename']).stem + '.meta')
+        json_content = None
+        if meta_filename.exists():
+            with open(meta_filename, 'r', encoding='utf8') as f:
+                json_content = json.load(f)
+        if json_content:
+            crash['roleId'] = json_content.get('roleId', 'unkown')
+            crash['userId'] = json_content.get('userId', 'unkown')
+        else:
+            crash['roleId'] = 'unkown'
+            crash['userId'] = 'unkown'
+
+def read_tag_file(filename):
+    '''读取crash的标记文件，这个文件的格式是每行为"category subcategory"'''
+    return [reason.strip().split(' ', maxsplit=1) for reason in read_lines(filename)]
+
+def update_tag(crash_list, tag_list, key_func, prefix=None):
+    '''根据keyfunc给所有的crash标记，增加reason1和reason2字段'''
+    field_reason1 = 'reason1'
+    field_reason2 = 'reason2'
+    if prefix is not None:
+        field_reason1 = prefix + '_reason1'
+        field_reason2 = prefix + '_reason2'
+    for crash in crash_list:
+        crash[field_reason1] = 'unknown'
+        crash[field_reason2] = 'unknown'
+        
+        value = key_func(crash)
+        for reason in tag_list:
+            if reason[1] in value:
+                crash[field_reason1] = reason[0]
+                crash[field_reason2] = reason[1]
+                break
+
+        if crash[field_reason2] == 'unknown':
+            print(crash['filename'], ' unkown')
