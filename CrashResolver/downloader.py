@@ -147,9 +147,9 @@ def download(url_path_tuple):
         
 def download_tasks(tasks):
     '''下载所有的url到文件中'''
-    with ThreadPoolExecutor(max_workers=10) as exector:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         for task in tasks:
-            exector.submit(download, task)
+            executor.submit(download, task)
             
 def query_server(query):
     '''测试query'''
@@ -176,7 +176,7 @@ class IosCrashDownloader:
 
     def __init__(self, save_dir, query) -> None:
         print(query)
-        self._save_dir = save_dir
+        self._save_dir = pathlib.Path(save_dir)
         self._query = query
         self._total_page = None
         
@@ -185,7 +185,7 @@ class IosCrashDownloader:
         end_pos = crash_url.rfind('/', 0)
         start_pos = crash_url.rfind('/', 0, end_pos)
         filename = crash_url[start_pos+1:end_pos]
-        path = pathlib.Path(self._save_dir) / (filename + get_config().CrashExt)
+        path = self._save_dir / (filename + get_config().CrashExt)
         
         if path.exists():
             logger.info('file %s exists, skip ', filename)
@@ -230,7 +230,7 @@ class AndroidCrashDownloader:
     '''
 
     def __init__(self, save_dir, query) -> None:
-        self._save_dir = save_dir
+        self._save_dir = pathlib.Path(save_dir)
         self._total_page = None
         self._query = query
 
@@ -242,7 +242,7 @@ class AndroidCrashDownloader:
         logger.debug('page #%s', page)
         self._total_page = json_data['data']['totalPage']
         
-        save_dir = pathlib.Path(self._save_dir)
+        save_dir = self._save_dir
         tasks = []
         for crash_data in json_data['data']['list']:
             task = self._get_zip_task(crash_data, save_dir)
