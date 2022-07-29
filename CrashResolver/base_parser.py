@@ -9,13 +9,14 @@ from .config import get_config
 
 logger = logging.getLogger(__name__)
 
+
 class ParseError(Exception):
-    pass
+    '''parser失败'''
 
 
 class BaseCrashParser:
     '''解析crash的base class'''
-    
+
     @abstractmethod
     def parse_crash(self, text: str, filename=None) -> dict:
         '''解析crash'''
