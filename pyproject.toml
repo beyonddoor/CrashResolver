@@ -13,3 +13,7 @@ dependencies = [
     "requests>=2.28.0",
     "PyYAML>=6.0"
 ]
+
+[project.urls]
+Documentation = "https://github.com/beyonddoor/CrashResolver/"
+Source = "https://github.com/beyonddoor/CrashResolver/"
