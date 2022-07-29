@@ -120,7 +120,7 @@ def build_query(query, start_time, end_time, game_version, platform, locale='05'
     query['platform'] = platform
     query['locale'] = locale
     query['localeId'] = locale
-    logger.debug(query)
+    logger.debug('query is %s', query)
 
 def _get_meta_task(crash_data, save_dir):
     '''下载crashurl的文本'''
@@ -154,7 +154,7 @@ def download_tasks(tasks):
 def query_server(query):
     '''测试query'''
     data = urllib.parse.urlencode(query)
-    # data = 'groupId=16&currentPage=1&pageSize=100&sort=&order=&product=20000048&locale=01&productId=20000048&localeId=01&startTime=2022-06-20%2000%3A00%3A00&endTime=2022-06-21%2023%3A59%3A59&rangeTime=&roleregistertime=&firstpaytime=&lastpaytime=&capricious=&myKeywords=&payStatus=&callStatus=&gameOrderType=&gameOrderInfoType=&isRepair=&platform=0&exceptionCode=&logClient=&operationLineId=&platformId=&advertiserCode=appsflyer&deviceGroupId=&mainChannel=&gameVersion=&parentchannelId=&channelId=&subchannelId=&advertiserTo=&eventKey=&serverId=&propKey=&custom=&serviceType=&serviceText=&updateType=&detail=&userType=&transactionid=&userInfoType=&userInfoText=&deviceInfoType=&deviceInfoText=&packageStatus=&packageLogType=&giftInfoType=&giftInfoText=&payamount=&bindPhones=&bingEmails=&bindState=&closeState=&isTestUser=&status=0&operateType=0&operateTypeText=&signKeyValid=&signKey=&chatInfo=&payChannel=&is_first=&userId=&area=&server=&action=&subType=&fnInterface=&event=&adPlatform=&adName=&adGroup=&gameChannelId=&chatLogType=&auditStatus=&reservationUser=&reservationType=&hotEventType=&studiotag=&isstudio=&__mask__=false&totalCount=95&queryFrom=1'
+    # data = 'groupId=16&currentPage=1&pageSize=100&sort=&order=&product=20000048&locale=01&productId=20000048&localeId=01&startTime=2020-07-29%2000%3A00%3A00&endTime=2020-07-29%2023%3A59%3A59&rangeTime=%E4%BB%8A%E5%A4%A9&roleregistertime=&firstpaytime=&lastpaytime=&capricious=&myKeywords=&payStatus=&callStatus=&gameOrderType=&gameOrderInfoType=&isRepair=&platform=1&exceptionCode=&logClient=&operationLineId=&platformId=&advertiserCode=appsflyer&deviceGroupId=&mainChannel=&gameVersion=1.1.7&parentchannelId=&channelId=&subchannelId=&advertiserTo=&eventKey=&serverId=&propKey=&custom=&serviceType=&serviceText=&updateType=&detail=&userType=&transactionid=&userInfoType=&userInfoText=&deviceInfoType=&deviceInfoText=&packageStatus=&packageLogType=&giftInfoType=&giftInfoText=&payamount=&bindPhones=&bingEmails=&bindState=&closeState=&isTestUser=&status=0&operateType=0&operateTypeText=&signKeyValid=&signKey=&chatInfo=&payChannel=&is_first=&userId=&area=&server=&action=&subType=&fnInterface=&event=&adPlatform=&adName=&adGroup=&gameChannelId=&chatLogType=&auditStatus=&reservationUser=&reservationType=&hotEventType=&studiotag=&isstudio=&__mask__=false&totalCount=&queryFrom=1'
     logger.debug('query_server %s', data)
     response = requests.post(url=get_config().IosCrashRepoUrl, headers={
             "accept": "application/json, text/plain, */*",
@@ -175,7 +175,7 @@ class IosCrashDownloader:
     '''
 
     def __init__(self, save_dir, query) -> None:
-        print(query)
+        logger.debug('query %s', query)
         self._save_dir = pathlib.Path(save_dir)
         self._query = query
         self._total_page = None

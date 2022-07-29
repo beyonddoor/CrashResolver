@@ -5,6 +5,7 @@ import enum
 import re
 
 from ..base_parser import BaseCrashParser
+from ..config import get_config
 
 
 PAT_TUMBSTONE = '*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***'
@@ -72,15 +73,16 @@ class CrashLogParser(BaseCrashParser):
         '''从stack计算一个指纹'''
         # #00 pc 0006b6d8  /system/lib/arm711/nb/libc.so (pthread_kill+0)
         lines = []
+        config = get_config()
 
         for stack in stacks:
             if stack.startswith('backtrace:'):
                 continue
             parts = stack.strip().split(' ', 4)
-            if parts[-1].startswith('/data/app/com.longtugame.yjfb'):
+            if parts[-1].startswith(config.AndroidApkPathPrefix):
                 # 游戏的so符号地址应该是相同的
                 parts[-1] = CrashLogParser._normalize_path(
-                    parts[-1], 'com.longtugame.yjfb')
+                    parts[-1], config.AndroidApkNamePrefix)
             else:
                 # 非游戏的so符号地址不确定
                 parts[2] = '(MAY_CHANGE_PER_OS)'

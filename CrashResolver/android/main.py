@@ -20,7 +20,7 @@ from . import crash_parser
 from .. import setup
 from .. import util
 from . import log_parser
-from ..util import group_count, group_detail
+from ..util import group_count, group_show
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ def _is_bad(crash):
     return len(crash) < 10
 
 
-# def _query_unkown_reason_logs(args):
+# def _query_unknown_reason_logs(args):
 #     '''reason log为未知的情况'''
 #     crash_list = database_csv.load(args.arg1)
 
@@ -203,10 +203,10 @@ def _groupby(args):
     crash_list = database_csv.load(args.db_file)
     if args.count_only:
         group_count(crash_list, lambda x: x.get(
-            args.key_name, 'unkown'), args.key_name)
+            args.key_name, 'unknown'), args.key_name)
     else:
-        group_detail(crash_list, lambda x: x.get(
-            args.key_name, 'unkown'), args.key_name, args.limit)
+        group_show(crash_list, lambda x: x.get(
+            args.key_name, 'unknown'), args.key_name, args.show_keys.split(','), args.limit)
 
 
 def _show_columns(args):
@@ -273,6 +273,7 @@ def _do_parse_args():
     sub_parser.add_argument('--limit', help='limit', default=100, type=int)
     sub_parser.add_argument(
         '--count_only', help='count only', action='store_true')
+    sub_parser.add_argument('--show_keys', help='show_keys, separated by comma, default is "filename"', default='filename', type=str)
     sub_parser.set_defaults(func=_groupby)
 
     sub_parser = sub_parsers.add_parser('columns', help='show columns')

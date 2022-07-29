@@ -4,16 +4,16 @@ from itertools import groupby
 import json
 from pathlib import Path
 
-def group_count(item_list, key, key_name):
+def group_count(dict_list, key, key_name):
     '''根据key进行分类'''
-    item_list.sort(key=key, reverse=True)
-    group_obj = groupby(item_list, key)
+    dict_list.sort(key=key, reverse=True)
+    group_obj = groupby(dict_list, key)
     groups = [(key, len(list(lists)))
               for (key, lists) in group_obj]
     groups.sort(key=lambda x: x[1], reverse=True)
 
-    total = len(item_list)
-    print(f'total: #{len(item_list)}')
+    total = len(dict_list)
+    print(f'total: #{len(dict_list)}')
     print(f'groups count: #{len(groups)}')
     print(f'groups key: #{key_name}')
     print('\n')
@@ -24,8 +24,16 @@ def group_count(item_list, key, key_name):
 
 def group_detail(dict_list: list[dict], key, key_name, head=10):
     '''根据key进行分类'''
-    dict_list.sort(key=key, reverse=True)
-    group_obj = groupby(dict_list, key)
+    group_show(dict_list, key, key_name, ['filename'], head)
+
+            
+def group_show(dict_list: list[dict], group_key, group_key_name, print_keys=list[str], head=10):
+    '''根据一个字段分类，显示另一个字段'''
+    if len(dict_list) == 0:
+        return
+    
+    dict_list.sort(key=group_key, reverse=True)
+    group_obj = groupby(dict_list, group_key)
     groups = [(key, list(lists)) for (key, lists) in group_obj]
     groups.sort(key=lambda x: len(x[1]), reverse=True)
 
@@ -37,12 +45,15 @@ def group_detail(dict_list: list[dict], key, key_name, head=10):
     for lists in groups:
         print(
             f"========== {len(lists[1])} ({len(lists[1])*100/total:2.2f}%) ==========")
-        print(key_name, ': ', lists[0])
+        print(group_key_name, ': ', lists[0])
         print()
-        for i in lists[1][0:head]:
-            print(i['filename'])
+        for dic in lists[1][0:head]:
+            for key in print_keys:
+                print(key, ' : ', dic[key])
         print()
-
+    
+    
+        
 
 def is_os_available(crash: dict, os_names: set) -> bool:
     '''os的符号是否可用'''
@@ -80,14 +91,14 @@ def update_meta(crash_list, meta_dir):
             with open(meta_filename, 'r', encoding='utf8') as f:
                 json_content = json.load(f)
         if json_content:
-            crash['roleId'] = json_content.get('roleId', 'unkown')
-            crash['userId'] = json_content.get('userId', 'unkown')
+            crash['roleId'] = json_content.get('roleId', 'unknown')
+            crash['userId'] = json_content.get('userId', 'unknown')
         else:
-            crash['roleId'] = 'unkown'
-            crash['userId'] = 'unkown'
+            crash['roleId'] = 'unknown'
+            crash['userId'] = 'unknown'
 
 def read_tag_file(filename):
-    '''读取crash的标记文件，这个文件的格式是每行为"category subcategory"'''
+    '''读取crash的标记文件，这个文件的格式是每行为"类别 子类别"'''
     return [reason.strip().split(' ', maxsplit=1) for reason in read_lines(filename)]
 
 def update_tag(crash_list, tag_list, key_func, prefix=None):
@@ -109,4 +120,4 @@ def update_tag(crash_list, tag_list, key_func, prefix=None):
                 break
 
         if crash[field_reason2] == 'unknown':
-            print(crash['filename'], ' unkown')
+            print(crash['filename'], ' unknown')

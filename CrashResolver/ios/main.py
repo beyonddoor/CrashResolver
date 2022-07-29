@@ -14,7 +14,7 @@ from CrashResolver import database_csv
 from . import crash_parser
 from .. import setup
 from .. import util
-from ..util import group_count, group_detail
+from ..util import group_count, group_show
 from ..config import get_config
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ def symbolicate(fullpath, is_strict)->dict:
         subprocess.run(args, check=False)
         if not sym_path.exists():
             raise SymbolicateError(f'symbolicate failed {fullpath}')
-    return crash_parser.IosCrashParser(is_strict).read_crash(sym_path)
+    return crash_parser.IosCrashParser(is_strict).read_crash(sym_path)['stacks']
 
 
 def symbolicate_groups(crash_groups, symbolicate_func):
@@ -84,7 +84,7 @@ def _do_symbolicate(args):
     groups = [(key, list(lists)) for (key, lists) in group_obj]
     groups.sort(key=lambda x: len(x[1]), reverse=True)
     symbolicate_groups(groups, lambda crash: symbolicate(
-        Path(crash['filename'])/args.crash_dir, args.strict))
+        Path(args.crash_dir)/crash['filename'], args.strict))
     database_csv.save(args.db_file, dict_list)
 
 
@@ -123,8 +123,8 @@ def _do_save_csv(args):
 def _do_groupby_key(args):
     '''根据key分类'''
     crash_list = database_csv.load(args.db_file)
-    group_detail(
-        crash_list, lambda crash: crash[args.key_name], args.key_name,  args.limit)
+    group_show(
+        crash_list, lambda crash: crash[args.key_name], args.key_name, args.show_keys.split(','), args.limit)
 
 
 def _do_list_fields(args):
@@ -136,7 +136,7 @@ def _do_list_fields(args):
 def _do_stat_os(args):
     '''统计os'''
     crash_list = database_csv.load(args.db_file)
-    group_detail(crash_list, get_os_version, 'os version', 10)
+    group_show(crash_list, get_os_version, 'os version', ['filename'], 10)
 
 
 def _do_parse_args():
@@ -160,6 +160,7 @@ def _do_parse_args():
     sub_parser.add_argument('db_file', help='csv database file')
     sub_parser.add_argument('--key_name', help='keyname', default='stack_key')
     sub_parser.add_argument('--limit', help='limit', default=100, type=int)
+    sub_parser.add_argument('--show_keys', help='show_keys, separated by comma, default is "filename"', default='filename', type=str)
     sub_parser.set_defaults(func=_do_groupby_key)
 
     sub_parser = sub_parsers.add_parser(

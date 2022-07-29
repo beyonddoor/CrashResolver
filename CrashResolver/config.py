@@ -5,9 +5,9 @@ import logging
 
 from collections import namedtuple
 _Config = namedtuple('Config', ['LogConfigFile', 'CrashExt', 'SymbolExt', 'IosSymbolicateArgs', 'IosCrashRepoUrl', 'AndroidCrashRepoUrl', 'Token', 'Product', 'ProductId',
-                                'AndroidSymbolicateArgs'], defaults=[''])
+                                'AndroidSymbolicateArgs', 'AndroidApkNamePrefix', 'AndroidApkPathPrefix'], defaults=[''])
 
-_configVal = _Config('', '.txt', '.sym', '', '', '', '', '', '', '')
+_configVal = _Config('', '.txt', '.sym', '', '', '', '', '', '', '', '', '')
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +19,6 @@ def get_config() -> _Config:
 def parse_config(filename):
     '''parse config'''
 
-    # try:
     with open(filename, 'r', encoding='utf8') as file:
         config = configparser.ConfigParser()
         config.read_file(file)
@@ -36,13 +35,12 @@ def parse_config(filename):
             'ProductId': section.get('ProductId', ''),
             'Token': section.get('Token', ''),
             'AndroidSymbolicateArgs': section.get('AndroidSymbolicateArgs', ''),
+            'AndroidApkNamePrefix': section.get('AndroidApkNamePrefix', ''),
+            'AndroidApkPathPrefix': section.get('AndroidApkPathPrefix', ''),
         }
 
         global _configVal
         _configVal = _Config(**values)
-
-    # except TypeError as err:
-    #     logger.error('parse config "%s" error: %s', filename, err)
 
 
 def write_config(filename):
@@ -58,4 +56,6 @@ def write_config(filename):
         config['Product'] = _configVal.Product
         config['ProductId'] = _configVal.ProductId
         config['AndroidSymbolicateArgs'] = _configVal.AndroidSymbolicateArgs
+        config['AndroidApkNamePrefix'] = _configVal.AndroidApkNamePrefix
+        config['AndroidApkPathPrefix'] = _configVal.AndroidApkPathPrefix
         config.write(file)
