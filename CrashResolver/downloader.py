@@ -6,6 +6,7 @@ import pathlib
 import argparse
 import logging
 import json
+import os
 import urllib.parse
 
 import requests
@@ -19,10 +20,12 @@ logger = logging.getLogger(__name__)
 
 def _get_meta_task(crash_data, save_dir):
     '''下载crashurl的文本'''
-    if crash_data['crashurl'] == '':
-        return
-
     crash_url = crash_data['crashurl']
+    if crash_url == '' and 'crashzipurl' in crash_data:
+        crash_url = crash_data['crashzipurl']
+        if crash_url == '':
+            return
+
     end_pos = crash_url.rfind('/', 0)
     start_pos = crash_url.rfind('/', 0, end_pos)
     filename = crash_url[start_pos+1:end_pos]
@@ -76,8 +79,8 @@ class IosCrashDownloader:
     def download_page(self, page):
         '''下载一页'''        
         json_data = self._page_reader.read_page(page)
-        logger.debug('json data = %s', json_data)
         self._total_page = json_data['data']['totalPage']
+        logger.debug('page #%s/%s pagesize=%s', page, self._total_page, len(json_data['data']['list']))
 
         tasks = []
         for crash_data in json_data['data']['list']:
@@ -118,8 +121,8 @@ class AndroidCrashDownloader:
     def download_page(self, page):
         '''download one page'''
         json_data = self._page_reader.read_page(page)
-        logger.debug('page #%s', page)
         self._total_page = json_data['data']['totalPage']
+        logger.debug('page #%s/%s pagesize=%s', page, self._total_page, len(json_data['data']['list']))
         
         save_dir = self._save_dir
         tasks = []
@@ -143,6 +146,7 @@ class AndroidCrashDownloader:
     def _get_text_task(self, crash_data, save_dir):
         '''下载crashurl的文本'''
         if crash_data['crashurl'] == '':
+            logger.error('crashurl is empty')
             return
 
         crash_url = crash_data['crashurl']
@@ -160,6 +164,7 @@ class AndroidCrashDownloader:
     def _get_zip_task(self, crash_data, save_dir):
         '''下载crashzipurl的zip'''
         if crash_data['crashzipurl'] == '':
+            logger.error('crashzipurl is empty')
             return
 
         crash_url = crash_data['crashzipurl']
@@ -182,7 +187,8 @@ class AndroidCrashDownloader:
             
 
 def _do_download_ios(args):
-    print(args)
+    os.makedirs(args.save_dir, exist_ok=True)
+    
     query = create_query()
     build_query(query, args.start_time, args.end_time, args.game_version, 1, args.locale)
     query['pageSize'] = args.page_size
@@ -193,10 +199,11 @@ def _do_download_ios(args):
         downloader.download_all()
 
 def _do_download_android(args):
+    os.makedirs(args.save_dir, exist_ok=True)
+    
     query = create_query()
     build_query(query, args.start_time, args.end_time, args.game_version, 0, args.locale)
     query['pageSize'] = args.page_size
-    
     downloader = AndroidCrashDownloader(args.save_dir, QueryPageReader(query))
     if args.page >= 0:
         downloader.download_page(args.page)

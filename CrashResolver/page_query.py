@@ -1,4 +1,5 @@
 import urllib.parse
+import re
 
 import requests
 import logging
@@ -154,14 +155,13 @@ class QueryPageReader(PageReader):
 class SimplePageReader(PageReader):
     '''简单粗暴的方式读取page'''
 
-    def __init__(self, headers, data_pattern, page_str) -> None:
+    def __init__(self, headers, data_pattern) -> None:
         self._headers = headers
         self._data_pattern = data_pattern
-        self._page_str = page_str
 
     def read_page(self, page):
-        '''文本替换的方式获取page'''
-        data = self._data_pattern.replace(self._page_str, str(page))
+        '''文本替换的方式获取page'''        
+        data = re.sub('&currentPage=1&', f'&currentPage={page}&', self._data_pattern)
         response = requests.post(
             url=get_config().IosCrashRepoUrl, headers=self._headers, data=data)
         return response.json()
